@@ -127,8 +127,7 @@ pub mod rate_limiter;
 pub mod retry;
 pub mod transaction_state_tracker;
 pub mod contract;
-pub mod admin_audit_log;
-pub mod service_management;
+pub mod anchor_health;
 
 // ── std-only modules (filesystem, runtime config) ─────────────────────────────
 #[cfg(feature = "std")]
@@ -167,8 +166,7 @@ pub use deterministic_hash::{compute_payload_hash, verify_payload_hash};
 pub use contract::{AnchorKitContract, EndpointUpdated, CacheConfig};
 pub use transaction_state_tracker::{TransactionState, TransactionStateRecord, RecoveryMetadata, OptRecovery};
 pub use transaction_state_tracker::{StorageBudgetMonitor, TransactionStateTracker};
-pub use admin_audit_log::{AdminAuditLog, AdminConfigChangeEvent, AdminAuditLogConfig};
-pub use service_management::{ServiceManager, ServiceToggleState, ServiceConfigSnapshot};
+pub use transaction_state_tracker::TransactionSummary;
 
 // ── std-only re-exports ───────────────────────────────────────────────────────
 #[cfg(feature = "std")]
@@ -203,10 +201,12 @@ pub use sep24::{
 };
 pub use contract::{AnchorKitContract, EndpointUpdated, CacheConfig};
 pub use contract::{HealthStatus, MetadataFreshnessReport, RateLimiterHealth};
+pub use contract::{AnchorHealthMetrics, AnchorProofRecord};
 pub use transaction_state_tracker::{TransactionState, TransactionStateRecord, RecoveryMetadata};
 pub use transaction_state_tracker::{
     StorageBudgetMonitor, TransactionStateTracker, BudgetStatus, BudgetAlert,
 };
+pub use transaction_state_tracker::TransactionSummary;
 pub mod streaming_monitor;
 pub use streaming_monitor::{StreamingTransactionMonitor, TransactionStatusUpdate};
 

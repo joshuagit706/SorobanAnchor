@@ -112,6 +112,10 @@ impl std::fmt::Display for SecretKey {
 
 // ── Network profile management ────────────────────────────────────────────────
 
+/// A custom network profile stored in `~/.anchorkit/networks.json`.
+///
+/// All three string fields are required and must be non-empty.  `horizon_url`
+/// is optional.  `is_default` defaults to `false` when absent from JSON.
 #[derive(Serialize, serde::Deserialize, Clone, Debug)]
 struct NetworkProfile {
     name: String,
@@ -122,6 +126,153 @@ struct NetworkProfile {
     is_default: bool,
 }
 
+/// Errors that can arise when loading or validating network profiles.
+#[derive(Debug, PartialEq)]
+enum NetworkProfileError {
+    /// The file could not be read from disk.
+    IoError(String),
+    /// The file content is not valid JSON.
+    MalformedJson(String),
+    /// A profile entry failed field-level validation.
+    InvalidProfile { index: usize, reason: String },
+}
+
+impl std::fmt::Display for NetworkProfileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NetworkProfileError::IoError(msg) =>
+                write!(f, "could not read networks.json: {msg}"),
+            NetworkProfileError::MalformedJson(msg) =>
+                write!(f, "networks.json contains invalid JSON: {msg}"),
+            NetworkProfileError::InvalidProfile { index, reason } =>
+                write!(f, "network profile at index {index} is invalid: {reason}"),
+        }
+    }
+}
+
+/// Validate a single `NetworkProfile` entry.
+///
+/// Returns `Ok(())` when the profile is well-formed, or an error string
+/// describing the first validation failure found.
+fn validate_network_profile(profile: &NetworkProfile) -> Result<(), String> {
+    if profile.name.trim().is_empty() {
+        return Err("'name' must not be empty".to_string());
+    }
+    if profile.name.len() > 64 {
+        return Err(format!("'name' is too long ({} chars, max 64)", profile.name.len()));
+    }
+    // Names must be URL-safe identifiers: alphanumeric, hyphens, underscores.
+    if !profile.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err(format!(
+            "'name' contains invalid characters (only alphanumeric, '-', '_' allowed): '{}'",
+            profile.name
+        ));
+    }
+    if profile.rpc_url.trim().is_empty() {
+        return Err("'rpc_url' must not be empty".to_string());
+    }
+    if !profile.rpc_url.starts_with("https://") && !profile.rpc_url.starts_with("http://") {
+        return Err(format!(
+            "'rpc_url' must start with 'https://' or 'http://': '{}'",
+            profile.rpc_url
+        ));
+    }
+    if profile.network_passphrase.trim().is_empty() {
+        return Err("'network_passphrase' must not be empty".to_string());
+    }
+    if let Some(ref h) = profile.horizon_url {
+        if !h.trim().is_empty()
+            && !h.starts_with("https://")
+            && !h.starts_with("http://")
+        {
+            return Err(format!(
+                "'horizon_url' must start with 'https://' or 'http://': '{h}'"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Load and validate network profiles from `networks_path()`.
+///
+/// Returns a tuple of:
+/// - `Vec<NetworkProfile>`: all profiles that passed validation.
+/// - `Vec<NetworkProfileError>`: every error encountered (file I/O, JSON parse,
+///   or per-entry field validation).  Callers should surface these as warnings.
+///
+/// This function **never panics** and **never crashes the process**.  A missing
+/// file is treated as an empty profile set (not an error).
+fn load_network_profiles_with_diagnostics() -> (Vec<NetworkProfile>, Vec<NetworkProfileError>) {
+    let path = networks_path();
+    if !path.exists() {
+        return (Vec::new(), Vec::new());
+    }
+
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                Vec::new(),
+                vec![NetworkProfileError::IoError(e.to_string())],
+            );
+        }
+    };
+
+    // An empty file is treated as an empty profile set.
+    if content.trim().is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+
+    // Parse the top-level JSON value first so we can give a clear error for
+    // completely malformed files before attempting typed deserialization.
+    let raw_value: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                Vec::new(),
+                vec![NetworkProfileError::MalformedJson(e.to_string())],
+            );
+        }
+    };
+
+    // The file must contain a JSON array at the top level.
+    if !raw_value.is_array() {
+        return (
+            Vec::new(),
+            vec![NetworkProfileError::MalformedJson(
+                "expected a JSON array at the top level".to_string(),
+            )],
+        );
+    }
+
+    // Deserialize into typed structs.  Individual entries that fail to
+    // deserialize are skipped with a diagnostic rather than aborting.
+    let raw_array = raw_value.as_array().unwrap(); // safe: checked above
+    let mut valid_profiles: Vec<NetworkProfile> = Vec::new();
+    let mut errors: Vec<NetworkProfileError> = Vec::new();
+
+    for (index, entry) in raw_array.iter().enumerate() {
+        match serde_json::from_value::<NetworkProfile>(entry.clone()) {
+            Err(e) => {
+                errors.push(NetworkProfileError::InvalidProfile {
+                    index,
+                    reason: format!("deserialization failed: {e}"),
+                });
+            }
+            Ok(profile) => {
+                match validate_network_profile(&profile) {
+                    Ok(()) => valid_profiles.push(profile),
+                    Err(reason) => {
+                        errors.push(NetworkProfileError::InvalidProfile { index, reason });
+                    }
+                }
+            }
+        }
+    }
+
+    (valid_profiles, errors)
+}
+
 fn networks_path() -> std::path::PathBuf {
     let dir = dirs_home().join(".anchorkit");
     std::fs::create_dir_all(&dir).ok();
@@ -129,7 +280,9 @@ fn networks_path() -> std::path::PathBuf {
 }
 
 fn dirs_home() -> std::path::PathBuf {
-    std::env::var("HOME")
+    // On Windows the home directory is USERPROFILE; fall back to HOME then ".".
+    std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("."))
 }
@@ -169,34 +322,66 @@ fn secure_read_file(path: &str) -> Result<String, std::io::Error> {
 }
 
 fn load_network_profiles() -> Vec<NetworkProfile> {
-    let path = networks_path();
-    if !path.exists() { return Vec::new(); }
-    let content = std::fs::read_to_string(&path).unwrap_or_default();
-    serde_json::from_str(&content).unwrap_or_default()
+    let (profiles, errors) = load_network_profiles_with_diagnostics();
+    for err in &errors {
+        eprintln!("warning: {err}");
+    }
+    profiles
 }
 
 fn save_network_profiles(profiles: &[NetworkProfile]) {
     let path = networks_path();
-    let json = serde_json::to_string_pretty(profiles).unwrap_or_default();
-    std::fs::write(path, json).ok();
+    let json = match serde_json::to_string_pretty(profiles) {
+        Ok(j) => j,
+        Err(e) => {
+            eprintln!("warning: could not serialize network profiles: {e}");
+            return;
+        }
+    };
+    if let Err(e) = std::fs::write(&path, json) {
+        eprintln!("warning: could not write {}: {e}", path.display());
+    }
 }
 
 fn find_profile<'a>(profiles: &'a [NetworkProfile], name: &str) -> Option<&'a NetworkProfile> {
     profiles.iter().find(|p| p.name == name)
 }
 
+/// Built-in network names that are always available without a custom profile.
+const BUILTIN_NETWORKS: &[&str] = &["testnet", "mainnet", "futurenet"];
+
+/// Resolve the RPC URL for a network name.
+///
+/// Resolution order:
+/// 1. Custom profile in `~/.anchorkit/networks.json`.
+/// 2. Built-in network (testnet / mainnet / futurenet).
+/// 3. Unknown network → falls back to testnet RPC with a clear warning.
 fn rpc_url_for(network: &str) -> String {
     let profiles = load_network_profiles();
     if let Some(p) = find_profile(&profiles, network) {
         return p.rpc_url.clone();
     }
+    if !BUILTIN_NETWORKS.contains(&network) {
+        eprintln!(
+            "warning: unknown network '{}' — no custom profile found. \
+             Falling back to testnet RPC. \
+             Add a profile with: anchorkit network add --name {network} --rpc-url <URL> --passphrase <PHRASE>",
+            network
+        );
+    }
     rpc_url(network).to_string()
 }
 
+/// Resolve the network passphrase for a network name.
+///
+/// Resolution order mirrors [`rpc_url_for`].
 fn passphrase_for(network: &str) -> String {
     let profiles = load_network_profiles();
     if let Some(p) = find_profile(&profiles, network) {
         return p.network_passphrase.clone();
+    }
+    if !BUILTIN_NETWORKS.contains(&network) {
+        // Warning already emitted by rpc_url_for; avoid double-printing.
     }
     passphrase(network).to_string()
 }

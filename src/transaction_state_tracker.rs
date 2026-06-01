@@ -364,6 +364,19 @@ pub struct TransactionStateRecord {
     pub recovery_metadata: OptRecovery,
 }
 
+/// Aggregated counts per [`TransactionState`] returned by
+/// [`TransactionStateTracker::summarize_transactions_by_status`].
+///
+/// All four counters are always present; unused states carry a count of zero.
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+pub struct TransactionSummary {
+    pub pending_count: u64,
+    pub in_progress_count: u64,
+    pub completed_count: u64,
+    pub failed_count: u64,
+    pub total_count: u64,
+}
+
 /// Audit entry for a single transition attempt (success or failure).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransitionAuditEntry {
@@ -1174,6 +1187,163 @@ impl TransactionStateTracker {
                 .extend_ttl(&key, TXSTATE_TTL, TXSTATE_TTL);
             Ok(())
         }
+    }
+
+    // ── Batch query helpers ──────────────────────────────────────────────────
+
+    /// Return up to `limit` transaction records whose IDs fall in the inclusive
+    /// range `[from_id, to_id]`, ordered by `transaction_id` ascending.
+    ///
+    /// The batch size is capped at 100 to prevent unbounded iteration.
+    ///
+    /// In production mode the method reads each ID in the range from persistent
+    /// storage; IDs that are no longer present (TTL expired) are silently
+    /// skipped. In dev mode the in-memory cache is filtered.
+    ///
+    /// # Arguments
+    ///
+    /// * `from_id` - Inclusive lower bound of the ID range.
+    /// * `to_id`   - Inclusive upper bound of the ID range.
+    /// * `limit`   - Maximum number of records to return (capped at 100).
+    /// * `env`     - The Soroban execution environment.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec` of matching [`TransactionStateRecord`]s, sorted by ID ascending.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use soroban_sdk::Env;
+    /// # use soroban_sdk::testutils::Address as _;
+    /// # let env = Env::default();
+    /// # let initiator = soroban_sdk::Address::generate(&env);
+    /// use anchorkit::transaction_state_tracker::TransactionStateTracker;
+    ///
+    /// let mut tracker = TransactionStateTracker::new(true);
+    /// for i in 1..=5 { tracker.create_transaction(i, initiator.clone(), &env).unwrap(); }
+    /// let batch = tracker.get_transactions_in_range(2, 4, 10, &env).unwrap();
+    /// assert_eq!(batch.len(), 3);
+    /// assert_eq!(batch[0].transaction_id, 2);
+    /// ```
+    pub fn get_transactions_in_range(
+        &self,
+        from_id: u64,
+        to_id: u64,
+        limit: u32,
+        env: &Env,
+    ) -> Result<alloc::vec::Vec<TransactionStateRecord>, String> {
+        const MAX_BATCH: u32 = 100;
+        let effective_limit = limit.min(MAX_BATCH);
+
+        if from_id > to_id {
+            return Ok(alloc::vec::Vec::new());
+        }
+
+        let mut results = alloc::vec::Vec::new();
+
+        if self.is_dev_mode {
+            // Collect matching records from the in-memory cache, sorted by ID.
+            let mut matching: alloc::vec::Vec<TransactionStateRecord> = self
+                .cache
+                .iter()
+                .filter(|r| r.transaction_id >= from_id && r.transaction_id <= to_id)
+                .cloned()
+                .collect();
+            matching.sort_by_key(|r| r.transaction_id);
+            for record in matching.into_iter().take(effective_limit as usize) {
+                results.push(record);
+            }
+        } else {
+            // Walk the ID range and load each record from persistent storage.
+            let mut id = from_id;
+            while id <= to_id && results.len() < effective_limit as usize {
+                let key = (symbol_short!("TXSTATE"), id);
+                if let Some(record) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, TransactionStateRecord>(&key)
+                {
+                    results.push(record);
+                }
+                id += 1;
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Return aggregated counts of transactions grouped by their current state.
+    ///
+    /// In dev mode this iterates the in-memory cache. In production mode it
+    /// reads the known-IDs list from persistent storage and loads each record.
+    ///
+    /// # Returns
+    ///
+    /// A [`TransactionSummary`] with per-state counts and a `total_count`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use soroban_sdk::Env;
+    /// # use soroban_sdk::testutils::Address as _;
+    /// # let env = Env::default();
+    /// # let initiator = soroban_sdk::Address::generate(&env);
+    /// use anchorkit::transaction_state_tracker::TransactionStateTracker;
+    ///
+    /// let mut tracker = TransactionStateTracker::new(true);
+    /// tracker.create_transaction(1, initiator.clone(), &env).unwrap();
+    /// tracker.create_transaction(2, initiator.clone(), &env).unwrap();
+    /// tracker.start_transaction(1, &env).unwrap();
+    /// tracker.complete_transaction(1, &env).unwrap();
+    ///
+    /// let summary = tracker.summarize_transactions_by_status(env).unwrap();
+    /// assert_eq!(summary.completed_count, 1);
+    /// assert_eq!(summary.pending_count, 1);
+    /// assert_eq!(summary.total_count, 2);
+    /// ```
+    pub fn summarize_transactions_by_status(
+        &self,
+        env: &Env,
+    ) -> Result<TransactionSummary, String> {
+        let mut summary = TransactionSummary::default();
+
+        if self.is_dev_mode {
+            for record in self.cache.iter() {
+                match record.state {
+                    TransactionState::Pending    => summary.pending_count += 1,
+                    TransactionState::InProgress => summary.in_progress_count += 1,
+                    TransactionState::Completed  => summary.completed_count += 1,
+                    TransactionState::Failed     => summary.failed_count += 1,
+                }
+                summary.total_count += 1;
+            }
+        } else {
+            let ids_key = symbol_short!("TXIDS");
+            let ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&ids_key)
+                .unwrap_or_else(|| Vec::new(env));
+            for id in ids.iter() {
+                let key = (symbol_short!("TXSTATE"), id);
+                if let Some(record) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, TransactionStateRecord>(&key)
+                {
+                    match record.state {
+                        TransactionState::Pending    => summary.pending_count += 1,
+                        TransactionState::InProgress => summary.in_progress_count += 1,
+                        TransactionState::Completed  => summary.completed_count += 1,
+                        TransactionState::Failed     => summary.failed_count += 1,
+                    }
+                    summary.total_count += 1;
+                }
+            }
+        }
+
+        Ok(summary)
     }
 
     /// Return all failed transactions (dev mode only).

@@ -366,6 +366,27 @@ pub struct KycRecord {
 }
 
 // ---------------------------------------------------------------------------
+// Anchor Blacklist and Clustering (#296)
+// ---------------------------------------------------------------------------
+
+#[contracttype]
+#[derive(Clone)]
+pub struct AnchorBlacklistEntry {
+    pub anchor: Address,
+    pub reason: String,
+    pub blacklisted_at: u64,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct AnchorCluster {
+    pub cluster_id: String,
+    pub name: String,
+    pub anchors: Vec<Address>,
+    pub created_at: u64,
+}
+
+// ---------------------------------------------------------------------------
 // Health check types (#268)
 // ---------------------------------------------------------------------------
 
@@ -660,6 +681,58 @@ pub struct ContractDiagnostics {
 }
 
 // ---------------------------------------------------------------------------
+// Anchor health metrics types
+// ---------------------------------------------------------------------------
+
+/// Accumulated endpoint health counters for a single anchor.
+///
+/// Written by [`AnchorKitContract::record_health_event`] and read by
+/// [`AnchorKitContract::get_anchor_health`].
+///
+/// `uptime_bps` is derived on read: `success_count * 10_000 / total_calls`
+/// (basis points, 0–10 000). Returns 0 when `total_calls == 0`.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnchorHealthMetrics {
+    pub anchor: Address,
+    /// Total successful endpoint calls recorded.
+    pub success_count: u64,
+    /// Total failed endpoint calls recorded.
+    pub failure_count: u64,
+    /// Total calls (`success_count + failure_count`).
+    pub total_calls: u64,
+    /// Uptime in basis points (0–10 000). 10 000 = 100 %.
+    pub uptime_bps: u32,
+    /// Ledger timestamp of the most recent recorded event (0 if none).
+    pub last_event_at: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Proof-of-possession types
+// ---------------------------------------------------------------------------
+
+/// On-chain record of an anchor's proof-of-possession for an endpoint.
+///
+/// The anchor submits a SHA-256 hash of `challenge || endpoint` (where
+/// `challenge` is a nonce the anchor fetches from its own stellar.toml or
+/// metadata endpoint). The contract stores the hash; callers verify by
+/// recomputing it off-chain and calling
+/// [`AnchorKitContract::verify_endpoint_proof`].
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnchorProofRecord {
+    pub anchor: Address,
+    /// The endpoint URL this proof covers.
+    pub endpoint: String,
+    /// SHA-256(challenge_bytes || endpoint_bytes) submitted by the anchor.
+    pub proof_hash: BytesN<32>,
+    /// Ledger timestamp when the proof was registered.
+    pub registered_at: u64,
+    /// True once the proof has been successfully verified by a caller.
+    pub verified: bool,
+}
+
+// ---------------------------------------------------------------------------
 // #247 — on-chain schema versioning
 //
 // Each persistent contract type carries a `schema_version: u32` field.
@@ -682,6 +755,38 @@ pub struct ContractDiagnostics {
 /// [`KycRecord`].  Consumers should compare against this constant when reading
 /// stored data to detect version skew.
 pub const SCHEMA_V1: u32 = 1;
+
+/// Aggregated transaction counts returned by
+/// [`AnchorKitContract::summarize_transactions_by_status`].
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransactionStatusSummary {
+    pub pending_count: u64,
+    pub in_progress_count: u64,
+    pub completed_count: u64,
+    pub failed_count: u64,
+    pub total_count: u64,
+}
+
+/// A single versioned snapshot of anchor metadata, stored in the history log.
+///
+/// Written by [`AnchorKitContract::set_anchor_metadata`] each time the metadata
+/// changes. The `version` field is a monotonically increasing counter scoped to
+/// the anchor; `updated_at` is the ledger timestamp of the write.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnchorMetadataVersion {
+    /// Monotonically increasing version number (1-based).
+    pub version: u32,
+    /// Ledger timestamp when this version was written.
+    pub updated_at: u64,
+    pub reputation_score: u32,
+    pub average_settlement_time: u64,
+    pub liquidity_score: u32,
+    pub uptime_percentage: u32,
+    pub total_volume: u64,
+    pub is_active: bool,
+}
 
 // ---------------------------------------------------------------------------
 // Event structs
@@ -880,6 +985,22 @@ fn anchor_meta_key(env: &Env, anchor: &Address) -> BytesN<32> {
     let xdr = anchor.clone().to_xdr(env);
     let raw = xdr_to_vec(&xdr);
     make_storage_key(env, &[b"ANCHMETA", &raw])
+}
+
+fn anchor_blacklist_key(env: &Env, anchor: &Address) -> BytesN<32> {
+    let xdr = anchor.clone().to_xdr(env);
+    let raw = xdr_to_vec(&xdr);
+    make_storage_key(env, &[b"BLACKLIST", &raw])
+}
+
+fn anchor_cluster_key(env: &Env, cluster_id: &String) -> BytesN<32> {
+    let xdr = cluster_id.clone().to_xdr(env);
+    let raw = xdr_to_vec(&xdr);
+    make_storage_key(env, &[b"CLUSTER", &raw])
+}
+
+fn anchor_cluster_list_key(env: &Env) -> BytesN<32> {
+    make_storage_key(env, &[b"CLUSTERLIST"])
 }
 
 /// Convert a Soroban `Bytes` value to a native `Vec<u8>` for use in key helpers.
@@ -3055,6 +3176,61 @@ impl AnchorKitContract {
         quote
     }
 
+    /// Accept a quote with compliance gating (#297).
+    ///
+    /// Verifies that the subject has passed compliance checks before accepting the quote.
+    /// If the subject or corridor requires compliance checks, they must be passed first.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment context.
+    /// * `receiver` - The address accepting the quote.
+    /// * `anchor` - The anchor providing the quote.
+    /// * `quote_id` - The quote identifier.
+    /// * `require_compliance` - Whether to enforce compliance checks.
+    ///
+    /// # Returns
+    ///
+    /// The accepted [`Quote`].
+    ///
+    /// # Errors
+    ///
+    /// Panics with [`ErrorCode::ComplianceNotMet`] if compliance is required but not passed.
+    pub fn accept_quote_with_compliance(
+        env: Env,
+        receiver: Address,
+        anchor: Address,
+        quote_id: u64,
+        require_compliance: bool,
+    ) -> Quote {
+        receiver.require_auth();
+        
+        // Get the quote
+        let anchor_xdr = anchor.clone().to_xdr(&env);
+        let anchor_raw = xdr_to_vec(&anchor_xdr);
+        let q_key = make_storage_key(&env, &[b"QUOTE", &anchor_raw, &quote_id.to_be_bytes()]);
+        let quote: Quote = env.storage().persistent().get(&q_key)
+            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::AttestationNotFound));
+
+        // #297: Enforce compliance gating if required
+        if require_compliance {
+            let comp_key = compliance_check_key(&env, &receiver, &String::from_str(&env, "kyc"));
+            let passed = env.storage().persistent()
+                .get::<_, ComplianceCheck>(&comp_key)
+                .map(|r| r.result == 1u32)
+                .unwrap_or(false);
+            if !passed {
+                panic_with_error!(&env, ErrorCode::ComplianceNotMet);
+            }
+        }
+
+        env.events().publish(
+            (symbol_short!("quote"), symbol_short!("accepted"), quote_id),
+            QuoteReceivedEvent { quote_id, receiver, timestamp: env.ledger().timestamp() },
+        );
+        quote
+    }
+
     // -----------------------------------------------------------------------
     // Session-aware attestation
     // -----------------------------------------------------------------------
@@ -3595,6 +3771,34 @@ impl AnchorKitContract {
         env.storage().persistent().set(&meta_key, &meta);
         env.storage().persistent().extend_ttl(&meta_key, PERSISTENT_TTL, PERSISTENT_TTL);
 
+        // ── Version history ──────────────────────────────────────────────────
+        // Increment the per-anchor version counter and append a history entry.
+        let xdr = anchor.clone().to_xdr(&env);
+        let raw = xdr_to_vec(&xdr);
+        let vcnt_key = make_storage_key(&env, &[b"METAVCNT", &raw]);
+        let version: u32 = env
+            .storage()
+            .persistent()
+            .get::<_, u32>(&vcnt_key)
+            .unwrap_or(0)
+            + 1;
+        env.storage().persistent().set(&vcnt_key, &version);
+        env.storage().persistent().extend_ttl(&vcnt_key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        let history_entry = AnchorMetadataVersion {
+            version,
+            updated_at: env.ledger().timestamp(),
+            reputation_score,
+            average_settlement_time,
+            liquidity_score,
+            uptime_percentage,
+            total_volume,
+            is_active: true,
+        };
+        let hkey = make_storage_key(&env, &[b"METAHIST", &raw, &version.to_be_bytes()]);
+        env.storage().persistent().set(&hkey, &history_entry);
+        env.storage().persistent().extend_ttl(&hkey, PERSISTENT_TTL, PERSISTENT_TTL);
+
         // Maintain ANCHLIST — stored under a deterministic key (#229)
         let list_key = make_storage_key(&env, &[b"ANCHLIST"]);
         let mut list: Vec<Address> = env.storage().persistent()
@@ -3605,6 +3809,85 @@ impl AnchorKitContract {
             env.storage().persistent().set(&list_key, &list);
             env.storage().persistent().extend_ttl(&list_key, PERSISTENT_TTL, PERSISTENT_TTL);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Anchor metadata version history
+    // -----------------------------------------------------------------------
+
+    /// Return the current version number for an anchor's metadata history.
+    ///
+    /// Returns `0` when no metadata has ever been set for the anchor.
+    pub fn get_anchor_metadata_version_count(env: Env, anchor: Address) -> u32 {
+        let xdr = anchor.clone().to_xdr(&env);
+        let raw = xdr_to_vec(&xdr);
+        let vcnt_key = make_storage_key(&env, &[b"METAVCNT", &raw]);
+        env.storage()
+            .persistent()
+            .get::<_, u32>(&vcnt_key)
+            .unwrap_or(0)
+    }
+
+    /// Retrieve a specific historical version of an anchor's metadata.
+    ///
+    /// Versions are 1-based and increase monotonically with each call to
+    /// [`set_anchor_metadata`](Self::set_anchor_metadata).
+    ///
+    /// # Errors
+    ///
+    /// Panics with [`ErrorCode::AttestorNotRegistered`] when the requested
+    /// version does not exist (never written or TTL expired).
+    pub fn get_anchor_metadata_at_version(
+        env: Env,
+        anchor: Address,
+        version: u32,
+    ) -> AnchorMetadataVersion {
+        let xdr = anchor.clone().to_xdr(&env);
+        let raw = xdr_to_vec(&xdr);
+        let hkey = make_storage_key(&env, &[b"METAHIST", &raw, &version.to_be_bytes()]);
+        env.storage()
+            .persistent()
+            .get::<_, AnchorMetadataVersion>(&hkey)
+            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::AttestorNotRegistered))
+    }
+
+    /// Return the full ordered metadata history for an anchor, from version 1
+    /// to the current version, capped at 50 entries to prevent unbounded reads.
+    ///
+    /// Entries are returned in ascending version order (oldest first).
+    /// Versions whose storage entries have expired are silently omitted.
+    ///
+    /// # Returns
+    ///
+    /// A [`Vec`] of [`AnchorMetadataVersion`] records, oldest first.
+    pub fn get_anchor_metadata_history(
+        env: Env,
+        anchor: Address,
+    ) -> Vec<AnchorMetadataVersion> {
+        const MAX_HISTORY: u32 = 50;
+        let xdr = anchor.clone().to_xdr(&env);
+        let raw = xdr_to_vec(&xdr);
+        let vcnt_key = make_storage_key(&env, &[b"METAVCNT", &raw]);
+        let total: u32 = env
+            .storage()
+            .persistent()
+            .get::<_, u32>(&vcnt_key)
+            .unwrap_or(0);
+
+        let mut history = Vec::new(&env);
+        // Start from the oldest version that fits within the cap.
+        let start = if total > MAX_HISTORY { total - MAX_HISTORY + 1 } else { 1 };
+        for v in start..=total {
+            let hkey = make_storage_key(&env, &[b"METAHIST", &raw, &v.to_be_bytes()]);
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<_, AnchorMetadataVersion>(&hkey)
+            {
+                history.push_back(entry);
+            }
+        }
+        history
     }
 
     /// Reactivate a previously deactivated anchor (admin-only). Sets `is_active = true`.
@@ -3654,6 +3937,163 @@ impl AnchorKitContract {
         active
     }
 
+    // -----------------------------------------------------------------------
+    // Anchor Blacklist Management (#296)
+    // -----------------------------------------------------------------------
+
+    /// Add an anchor to the blacklist.
+    ///
+    /// Blacklisted anchors are excluded from routing and quote selection.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment context.
+    /// * `anchor` - Address of the anchor to blacklist.
+    /// * `reason` - Reason for blacklisting.
+    ///
+    /// # Authorization
+    ///
+    /// Requires admin privileges.
+    pub fn blacklist_anchor(env: Env, anchor: Address, reason: String) {
+        Self::require_admin(&env);
+        let entry = AnchorBlacklistEntry {
+            anchor: anchor.clone(),
+            reason,
+            blacklisted_at: env.ledger().timestamp(),
+        };
+        let key = anchor_blacklist_key(&env, &anchor);
+        env.storage().persistent().set(&key, &entry);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+        env.events().publish(
+            (symbol_short!("anchor"), symbol_short!("blacklist")),
+            anchor,
+        );
+    }
+
+    /// Remove an anchor from the blacklist.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment context.
+    /// * `anchor` - Address of the anchor to remove from blacklist.
+    ///
+    /// # Authorization
+    ///
+    /// Requires admin privileges.
+    pub fn remove_from_blacklist(env: Env, anchor: Address) {
+        Self::require_admin(&env);
+        let key = anchor_blacklist_key(&env, &anchor);
+        env.storage().persistent().remove(&key);
+        env.events().publish(
+            (symbol_short!("anchor"), symbol_short!("unblacklist")),
+            anchor,
+        );
+    }
+
+    /// Check if an anchor is blacklisted.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment context.
+    /// * `anchor` - Address to check.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the anchor is blacklisted, `false` otherwise.
+    pub fn is_anchor_blacklisted(env: Env, anchor: Address) -> bool {
+        let key = anchor_blacklist_key(&env, &anchor);
+        env.storage()
+            .persistent()
+            .get::<_, AnchorBlacklistEntry>(&key)
+            .is_some()
+    }
+
+    // -----------------------------------------------------------------------
+    // Anchor Cluster Management (#296)
+    // -----------------------------------------------------------------------
+
+    /// Create a new anchor cluster.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment context.
+    /// * `cluster_id` - Unique identifier for the cluster.
+    /// * `name` - Human-readable name for the cluster.
+    /// * `anchors` - Initial list of anchors in the cluster.
+    ///
+    /// # Authorization
+    ///
+    /// Requires admin privileges.
+    pub fn create_anchor_cluster(env: Env, cluster_id: String, name: String, anchors: Vec<Address>) {
+        Self::require_admin(&env);
+        let cluster = AnchorCluster {
+            cluster_id: cluster_id.clone(),
+            name,
+            anchors,
+            created_at: env.ledger().timestamp(),
+        };
+        let key = anchor_cluster_key(&env, &cluster_id);
+        env.storage().persistent().set(&key, &cluster);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        // Add to cluster list
+        let list_key = anchor_cluster_list_key(&env);
+        let mut cluster_ids: Vec<String> = env
+            .storage()
+            .persistent()
+            .get(&list_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        cluster_ids.push_back(cluster_id);
+        env.storage().persistent().set(&list_key, &cluster_ids);
+        env.storage()
+            .persistent()
+            .extend_ttl(&list_key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        env.events().publish(
+            (symbol_short!("cluster"), symbol_short!("created")),
+            (),
+        );
+    }
+
+    /// Get a cluster by ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment context.
+    /// * `cluster_id` - The cluster identifier.
+    ///
+    /// # Returns
+    ///
+    /// The [`AnchorCluster`] if found.
+    pub fn get_anchor_cluster(env: Env, cluster_id: String) -> AnchorCluster {
+        let key = anchor_cluster_key(&env, &cluster_id);
+        env.storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::NotFound))
+    }
+
+    /// List all anchor clusters.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment context.
+    ///
+    /// # Returns
+    ///
+    /// Vector of cluster IDs.
+    pub fn list_anchor_clusters(env: Env) -> Vec<String> {
+        let list_key = anchor_cluster_list_key(&env);
+        env.storage()
+            .persistent()
+            .get(&list_key)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
     pub fn route_transaction(env: Env, options: RoutingOptions) -> Quote {
         validate_currency_code(&env, &options.request.base_asset);
         validate_currency_code(&env, &options.request.quote_asset);
@@ -3666,6 +4106,11 @@ impl AnchorKitContract {
         // Collect valid quotes from active anchors
         let mut candidates: Vec<Quote> = Vec::new(&env);
         for anchor in anchors.iter() {
+            // #296: Skip blacklisted anchors
+            if Self::is_anchor_blacklisted(env.clone(), anchor.clone()) {
+                continue;
+            }
+
             // Check reputation filter
             let meta: RoutingAnchorMeta = match env.storage().persistent().get(&anchor_meta_key(&env, &anchor)) {
                 Some(m) => m,
@@ -4068,7 +4513,7 @@ impl AnchorKitContract {
             initiator,
             timestamp: now,
             last_updated: now,
-            last_updated_ledger: env.ledger().sequence(),
+            last_updated_ledger: current_ledger,
             error_message: None,
             state_history: history,
             recovery_metadata: OptRecovery::None,
@@ -4076,6 +4521,78 @@ impl AnchorKitContract {
         let key = (symbol_short!("TXSTATE"), transaction_id);
         env.storage().persistent().set(&key, &record);
         env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+        // Track in TXIDS list for summarize_transactions_by_status
+        let ids_key = symbol_short!("TXIDS");
+        let mut ids: soroban_sdk::Vec<u64> = env
+            .storage().persistent().get(&ids_key)
+            .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+        ids.push_back(transaction_id);
+        env.storage().persistent().set(&ids_key, &ids);
+        env.storage().persistent().extend_ttl(&ids_key, PERSISTENT_TTL, PERSISTENT_TTL);
+        record
+    }
+
+    /// Advance a transaction from Pending to InProgress.
+    pub fn start_transaction_record(env: Env, transaction_id: u64) -> TransactionStateRecord {
+        Self::advance_transaction_state_internal(&env, transaction_id, TransactionState::InProgress, None)
+    }
+
+    /// Advance a transaction from InProgress to Completed.
+    pub fn complete_transaction_record(env: Env, transaction_id: u64) -> TransactionStateRecord {
+        Self::advance_transaction_state_internal(&env, transaction_id, TransactionState::Completed, None)
+    }
+
+    /// Advance a transaction to Failed with an error message.
+    pub fn fail_transaction_record(env: Env, transaction_id: u64, error_message: String) -> TransactionStateRecord {
+        Self::advance_transaction_state_internal(&env, transaction_id, TransactionState::Failed, Some(error_message))
+    }
+
+    fn advance_transaction_state_internal(
+        env: &Env,
+        transaction_id: u64,
+        new_state: TransactionState,
+        error_message: Option<String>,
+    ) -> TransactionStateRecord {
+        let key = (symbol_short!("TXSTATE"), transaction_id);
+        let mut record: TransactionStateRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(env, ErrorCode::AttestationNotFound));
+
+        let from_state = record.state;
+        if !from_state.is_valid_transition(new_state) {
+            panic_with_error!(env, ErrorCode::IllegalTransition);
+        }
+
+        let now = env.ledger().timestamp();
+        let current_ledger = env.ledger().sequence();
+        record.state = new_state;
+        record.last_updated = now;
+        record.last_updated_ledger = current_ledger;
+        record.error_message = error_message.clone();
+        record.state_history.push_back((new_state, now));
+
+        if new_state == TransactionState::Failed {
+            let reason = error_message
+                .unwrap_or_else(|| String::from_str(env, "unspecified failure"));
+            record.recovery_metadata = OptRecovery::Some(
+                crate::transaction_state_tracker::RecoveryMetadata {
+                    failure_reason: reason,
+                    last_updated_ledger: current_ledger,
+                    failed_from_state: from_state,
+                    retry_count: 0,
+                },
+            );
+        }
+
+        let ttl = if new_state.is_terminal() {
+            518_400u32 // ~30 days terminal TTL (matches TXSTATE_TTL_TERMINAL)
+        } else {
+            PERSISTENT_TTL
+        };
+        env.storage().persistent().set(&key, &record);
+        env.storage().persistent().extend_ttl(&key, ttl, ttl);
         record
     }
 
@@ -4505,6 +5022,108 @@ impl AnchorKitContract {
     }
 
     // -----------------------------------------------------------------------
+    // Batch transaction queries and summaries
+    // -----------------------------------------------------------------------
+
+    /// Return up to `limit` transaction records whose IDs fall in the inclusive
+    /// range `[from_id, to_id]`, ordered by ID ascending.
+    ///
+    /// The batch size is capped at 100 to prevent unbounded on-chain iteration.
+    /// This method reads directly from persistent storage and skips IDs that
+    /// have expired (TTL elapsed).
+    ///
+    /// # Arguments
+    ///
+    /// * `from_id` - Inclusive lower bound of the transaction ID range.
+    /// * `to_id`   - Inclusive upper bound of the transaction ID range.
+    /// * `limit`   - Maximum records to return (capped at 100).
+    ///
+    /// # Returns
+    ///
+    /// A [`Vec`] of [`TransactionStateRecord`]s sorted by ID ascending.
+    pub fn get_transactions_in_range(
+        env: Env,
+        from_id: u64,
+        to_id: u64,
+        limit: u32,
+    ) -> Vec<TransactionStateRecord> {
+        const MAX_BATCH: u32 = 100;
+        let effective_limit = limit.min(MAX_BATCH);
+        let mut results = Vec::new(&env);
+
+        if from_id > to_id {
+            return results;
+        }
+
+        let mut id = from_id;
+        let mut count = 0u32;
+        while id <= to_id && count < effective_limit {
+            let key = (symbol_short!("TXSTATE"), id);
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<_, TransactionStateRecord>(&key)
+            {
+                results.push_back(record);
+                count += 1;
+            }
+            id += 1;
+        }
+        results
+    }
+
+    /// Return aggregated transaction counts grouped by current state.
+    ///
+    /// Reads the known-IDs list from persistent storage and counts each live
+    /// record by its current [`TransactionState`]. Records whose TTL has
+    /// elapsed are silently excluded from the totals.
+    ///
+    /// # Returns
+    ///
+    /// A [`TransactionStatusSummary`] with per-state counts and a `total_count`.
+    pub fn summarize_transactions_by_status(env: Env) -> TransactionStatusSummary {
+        use crate::transaction_state_tracker::TransactionState as TxState;
+
+        let ids_key = symbol_short!("TXIDS");
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&ids_key)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let mut pending_count: u64 = 0;
+        let mut in_progress_count: u64 = 0;
+        let mut completed_count: u64 = 0;
+        let mut failed_count: u64 = 0;
+        let mut total_count: u64 = 0;
+
+        for id in ids.iter() {
+            let key = (symbol_short!("TXSTATE"), id);
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<_, TransactionStateRecord>(&key)
+            {
+                match record.state {
+                    TxState::Pending    => pending_count += 1,
+                    TxState::InProgress => in_progress_count += 1,
+                    TxState::Completed  => completed_count += 1,
+                    TxState::Failed     => failed_count += 1,
+                }
+                total_count += 1;
+            }
+        }
+
+        TransactionStatusSummary {
+            pending_count,
+            in_progress_count,
+            completed_count,
+            failed_count,
+            total_count,
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Read-only diagnostics (#350)
     // -----------------------------------------------------------------------
 
@@ -4579,6 +5198,219 @@ impl AnchorKitContract {
             total_sessions_created,
             checked_at: env.ledger().timestamp(),
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Anchor health metrics
+    // -----------------------------------------------------------------------
+
+    /// Storage key for an anchor's health metric counters.
+    fn health_metrics_key(env: &Env, anchor: &Address) -> BytesN<32> {
+        let xdr = anchor.clone().to_xdr(env);
+        let raw = xdr_to_vec(&xdr);
+        make_storage_key(env, &[b"HLTHCNT", &raw])
+    }
+
+    /// Record a single endpoint health event for `anchor`.
+    ///
+    /// Pass `success = true` for a successful call (discovery, quote fetch,
+    /// capability check) and `false` for a failure. Counters are accumulated
+    /// persistently so uptime percentages survive across ledgers.
+    ///
+    /// Admin-only — callers that integrate AnchorKit into a monitoring loop
+    /// should call this after every outbound anchor interaction.
+    pub fn record_health_event(env: Env, anchor: Address, success: bool) {
+        Self::require_admin(&env);
+        let key = Self::health_metrics_key(&env, &anchor);
+        let now = env.ledger().timestamp();
+
+        let mut metrics: AnchorHealthMetrics = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(AnchorHealthMetrics {
+                anchor: anchor.clone(),
+                success_count: 0,
+                failure_count: 0,
+                total_calls: 0,
+                uptime_bps: 0,
+                last_event_at: 0,
+            });
+
+        if success {
+            metrics.success_count += 1;
+        } else {
+            metrics.failure_count += 1;
+        }
+        metrics.total_calls = metrics.success_count + metrics.failure_count;
+        metrics.uptime_bps = if metrics.total_calls == 0 {
+            0
+        } else {
+            (metrics.success_count.saturating_mul(10_000) / metrics.total_calls) as u32
+        };
+        metrics.last_event_at = now;
+
+        env.storage().persistent().set(&key, &metrics);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        env.events().publish(
+            (symbol_short!("health"), symbol_short!("event"), anchor),
+            (success, metrics.uptime_bps),
+        );
+    }
+
+    /// Return the accumulated health metrics for `anchor`.
+    ///
+    /// Returns a zeroed [`AnchorHealthMetrics`] when no events have been
+    /// recorded yet (never panics).
+    pub fn get_anchor_health(env: Env, anchor: Address) -> AnchorHealthMetrics {
+        let key = Self::health_metrics_key(&env, &anchor);
+        env.storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(AnchorHealthMetrics {
+                anchor: anchor.clone(),
+                success_count: 0,
+                failure_count: 0,
+                total_calls: 0,
+                uptime_bps: 0,
+                last_event_at: 0,
+            })
+    }
+
+    /// Reset all health counters for `anchor` to zero. Admin-only.
+    ///
+    /// Useful after a maintenance window or anchor migration where historical
+    /// failure counts should not skew the new baseline.
+    pub fn reset_anchor_health(env: Env, anchor: Address) {
+        Self::require_admin(&env);
+        let key = Self::health_metrics_key(&env, &anchor);
+        let now = env.ledger().timestamp();
+        let metrics = AnchorHealthMetrics {
+            anchor: anchor.clone(),
+            success_count: 0,
+            failure_count: 0,
+            total_calls: 0,
+            uptime_bps: 0,
+            last_event_at: now,
+        };
+        env.storage().persistent().set(&key, &metrics);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+    }
+
+    // -----------------------------------------------------------------------
+    // Proof-of-possession for anchor endpoints
+    // -----------------------------------------------------------------------
+
+    /// Storage key for an anchor's proof-of-possession record.
+    fn pop_key(env: &Env, anchor: &Address) -> BytesN<32> {
+        let xdr = anchor.clone().to_xdr(env);
+        let raw = xdr_to_vec(&xdr);
+        make_storage_key(env, &[b"ANCHPOP", &raw])
+    }
+
+    /// Register a proof-of-possession for `anchor`'s `endpoint`.
+    ///
+    /// The anchor computes `proof_hash = SHA-256(challenge_bytes || endpoint_bytes)`
+    /// where `challenge_bytes` is a nonce the anchor controls (e.g. a value
+    /// published in its `stellar.toml` under `ANCHOR_PROOF_CHALLENGE`).
+    /// Storing the hash on-chain binds the anchor's Stellar identity to the
+    /// endpoint URL without revealing the raw challenge.
+    ///
+    /// The anchor must authorize this call (`anchor.require_auth()`).
+    ///
+    /// # Errors
+    ///
+    /// Panics with [`ErrorCode::AttestorNotRegistered`] when `anchor` is not
+    /// a registered attestor.
+    /// Panics with [`ErrorCode::InvalidEndpointFormat`] when `endpoint` fails
+    /// HTTPS domain validation.
+    pub fn register_endpoint_proof(
+        env: Env,
+        anchor: Address,
+        endpoint: String,
+        proof_hash: BytesN<32>,
+    ) {
+        anchor.require_auth();
+        Self::check_attestor(&env, &anchor);
+
+        // Validate the endpoint URL before storing.
+        let endpoint_str = Self::soroban_string_to_rust_string(&env, &endpoint);
+        crate::validate_anchor_domain(&endpoint_str)
+            .unwrap_or_else(|_| panic_with_error!(&env, ErrorCode::InvalidEndpointFormat));
+
+        let now = env.ledger().timestamp();
+        let record = AnchorProofRecord {
+            anchor: anchor.clone(),
+            endpoint,
+            proof_hash,
+            registered_at: now,
+            verified: false,
+        };
+        let key = Self::pop_key(&env, &anchor);
+        env.storage().persistent().set(&key, &record);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        env.events().publish(
+            (symbol_short!("pop"), symbol_short!("registered"), anchor),
+            now,
+        );
+    }
+
+    /// Verify a proof-of-possession by comparing `proof_hash` against the
+    /// stored record for `anchor`.
+    ///
+    /// Returns `true` and marks the record as `verified = true` when the
+    /// supplied hash matches the stored one. Returns `false` on mismatch or
+    /// when no proof has been registered.
+    ///
+    /// This is a pure verification call — it does **not** require admin auth
+    /// so that off-chain monitors can call it freely.
+    pub fn verify_endpoint_proof(
+        env: Env,
+        anchor: Address,
+        proof_hash: BytesN<32>,
+    ) -> bool {
+        let key = Self::pop_key(&env, &anchor);
+        let mut record: AnchorProofRecord = match env.storage().persistent().get(&key) {
+            Some(r) => r,
+            None => return false,
+        };
+
+        if record.proof_hash != proof_hash {
+            env.events().publish(
+                (symbol_short!("pop"), symbol_short!("failed"), anchor),
+                env.ledger().timestamp(),
+            );
+            return false;
+        }
+
+        // Mark as verified and persist.
+        record.verified = true;
+        env.storage().persistent().set(&key, &record);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        env.events().publish(
+            (symbol_short!("pop"), symbol_short!("verified"), anchor),
+            env.ledger().timestamp(),
+        );
+        true
+    }
+
+    /// Return the stored proof-of-possession record for `anchor`, or `None`
+    /// when no proof has been registered.
+    pub fn get_endpoint_proof(env: Env, anchor: Address) -> Option<AnchorProofRecord> {
+        env.storage()
+            .persistent()
+            .get(&Self::pop_key(&env, &anchor))
     }
 
     /// Return an aggregated health snapshot for the contract's key subsystems.

@@ -216,3 +216,201 @@ pub fn mock_anchor_capabilities() -> MockAnchorCapabilities {
         supports_sep38: true,
     }
 }
+
+// ── Edge case fixtures (#299) ──────────────────────────────────────────────────
+
+/// Returns a SEP-6 deposit response with minimal fields (edge case).
+pub fn mock_deposit_response_minimal() -> RawDepositResponse {
+    RawDepositResponse {
+        transaction_id: "minimal-txn-001".to_string(),
+        how: "Send funds".to_string(),
+        extra_info: None,
+        min_amount: None,
+        max_amount: None,
+        fee_fixed: None,
+        status: None,
+        clawback_enabled: None,
+        stellar_memo: None,
+        stellar_memo_type: None,
+        asset_code: None,
+    }
+}
+
+/// Returns a SEP-6 deposit response with all optional fields populated.
+pub fn mock_deposit_response_full() -> RawDepositResponse {
+    RawDepositResponse {
+        transaction_id: "full-txn-001".to_string(),
+        how: "Send USDC to anchor address".to_string(),
+        extra_info: Some("Additional instructions".to_string()),
+        min_amount: Some(1),
+        max_amount: Some(100_000),
+        fee_fixed: Some(5),
+        status: Some("pending_external".to_string()),
+        clawback_enabled: Some(true),
+        stellar_memo: Some("FULLMEMO".to_string()),
+        stellar_memo_type: Some("hash".to_string()),
+        asset_code: Some("USDC".to_string()),
+    }
+}
+
+/// Returns a SEP-6 withdrawal response with minimal fields.
+pub fn mock_withdrawal_response_minimal() -> RawWithdrawalResponse {
+    RawWithdrawalResponse {
+        transaction_id: "withdraw-min-001".to_string(),
+        account_id: "GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX".to_string(),
+        memo: None,
+        memo_type: None,
+        min_amount: None,
+        max_amount: None,
+        fee_fixed: None,
+        status: None,
+        asset_code: None,
+    }
+}
+
+/// Returns a SEP-6 withdrawal response with all optional fields.
+pub fn mock_withdrawal_response_full() -> RawWithdrawalResponse {
+    RawWithdrawalResponse {
+        transaction_id: "withdraw-full-001".to_string(),
+        account_id: "GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX".to_string(),
+        memo: Some("WITHDRAWMEMO".to_string()),
+        memo_type: Some("text".to_string()),
+        min_amount: Some(10),
+        max_amount: Some(50_000),
+        fee_fixed: Some(10),
+        status: Some("pending_anchor".to_string()),
+        asset_code: Some("USDC".to_string()),
+    }
+}
+
+/// Returns a SEP-6 transaction response with failed status.
+pub fn mock_transaction_response_failed() -> RawTransactionResponse {
+    RawTransactionResponse {
+        transaction_id: MOCK_TXN_ID.to_string(),
+        kind: Some("deposit".to_string()),
+        status: "error".to_string(),
+        amount_in: Some(100),
+        amount_out: None,
+        amount_fee: Some(1),
+        message: Some("Transaction failed: invalid account".to_string()),
+    }
+}
+
+/// Returns a SEP-24 transaction response with minimal fields.
+pub fn mock_sep24_transaction_minimal() -> RawSep24TransactionResponse {
+    RawSep24TransactionResponse {
+        id: "sep24-min-001".to_string(),
+        status: "pending_user_transfer_start".to_string(),
+        more_info_url: None,
+        stellar_transaction_id: None,
+        asset_code: None,
+    }
+}
+
+/// Returns a SEP-24 transaction response with all fields populated.
+pub fn mock_sep24_transaction_full() -> RawSep24TransactionResponse {
+    RawSep24TransactionResponse {
+        id: "sep24-full-001".to_string(),
+        status: "completed".to_string(),
+        more_info_url: Some(format!("{MOCK_ANCHOR_URL}/sep24/transaction?id=sep24-full-001")),
+        stellar_transaction_id: Some("stellar-txn-full-001".to_string()),
+        asset_code: Some("USDC".to_string()),
+    }
+}
+
+/// Returns a SEP-38 firm quote with minimal fields.
+pub fn mock_firm_quote_minimal() -> RawFirmQuote {
+    RawFirmQuote {
+        id: "quote-min-001".to_string(),
+        expires_at: MOCK_EXPIRES_AT.to_string(),
+        price: "1.0".to_string(),
+        sell_amount: "100".to_string(),
+        buy_amount: "100".to_string(),
+        sell_asset: "XLM".to_string(),
+        buy_asset: "USDC".to_string(),
+    }
+}
+
+/// Returns a SEP-38 firm quote with high precision amounts.
+pub fn mock_firm_quote_high_precision() -> RawFirmQuote {
+    RawFirmQuote {
+        id: "quote-precision-001".to_string(),
+        expires_at: MOCK_EXPIRES_AT.to_string(),
+        price: "1.123456789".to_string(),
+        sell_amount: "1000.123456789".to_string(),
+        buy_amount: "1123.456789012".to_string(),
+        sell_asset: "XLM".to_string(),
+        buy_asset: "USDC".to_string(),
+    }
+}
+
+/// Returns a SEP-38 price with different asset pair.
+pub fn mock_price_alternative() -> RawPrice {
+    RawPrice {
+        buy_asset: "EUR".to_string(),
+        sell_asset: "USD".to_string(),
+        price: "0.92".to_string(),
+    }
+}
+
+// ── Multi-anchor fixtures (#299) ───────────────────────────────────────────────
+
+/// Returns a SEP-6 deposit response from "Anchor A".
+pub fn mock_deposit_response_anchor_a() -> RawDepositResponse {
+    RawDepositResponse {
+        transaction_id: "anchor-a-txn-001".to_string(),
+        how: "Send to Anchor A address".to_string(),
+        extra_info: Some("Anchor A specific instructions".to_string()),
+        min_amount: Some(50),
+        max_amount: Some(50_000),
+        fee_fixed: Some(2),
+        status: Some("pending_external".to_string()),
+        clawback_enabled: Some(false),
+        stellar_memo: Some("ANCHORA".to_string()),
+        stellar_memo_type: Some("text".to_string()),
+        asset_code: Some("USDC".to_string()),
+    }
+}
+
+/// Returns a SEP-6 deposit response from "Anchor B" with different terms.
+pub fn mock_deposit_response_anchor_b() -> RawDepositResponse {
+    RawDepositResponse {
+        transaction_id: "anchor-b-txn-001".to_string(),
+        how: "Send to Anchor B address".to_string(),
+        extra_info: Some("Anchor B specific instructions".to_string()),
+        min_amount: Some(100),
+        max_amount: Some(100_000),
+        fee_fixed: Some(3),
+        status: Some("pending_external".to_string()),
+        clawback_enabled: Some(true),
+        stellar_memo: Some("ANCHORB".to_string()),
+        stellar_memo_type: Some("text".to_string()),
+        asset_code: Some("USDC".to_string()),
+    }
+}
+
+/// Returns a SEP-38 firm quote from "Anchor A".
+pub fn mock_firm_quote_anchor_a() -> RawFirmQuote {
+    RawFirmQuote {
+        id: "quote-a-001".to_string(),
+        expires_at: MOCK_EXPIRES_AT.to_string(),
+        price: "1.01".to_string(),
+        sell_amount: "1000".to_string(),
+        buy_amount: "1010".to_string(),
+        sell_asset: "XLM".to_string(),
+        buy_asset: "USDC".to_string(),
+    }
+}
+
+/// Returns a SEP-38 firm quote from "Anchor B" with better rate.
+pub fn mock_firm_quote_anchor_b() -> RawFirmQuote {
+    RawFirmQuote {
+        id: "quote-b-001".to_string(),
+        expires_at: MOCK_EXPIRES_AT.to_string(),
+        price: "1.005".to_string(),
+        sell_amount: "1000".to_string(),
+        buy_amount: "1005".to_string(),
+        sell_asset: "XLM".to_string(),
+        buy_asset: "USDC".to_string(),
+    }
+}
