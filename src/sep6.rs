@@ -42,6 +42,10 @@ pub enum TransactionStatus {
     TooSmall,
     /// Requested amount exceeds the anchor's maximum (SEP-6 `too_large`).
     TooLarge,
+    /// Transaction is pending on-chain Stellar network confirmation.
+    PendingStellar,
+    /// Waiting for the customer to take an action (SEP-6 `waiting_customer_action`).
+    WaitingCustomerAction,
     Error,
 }
 
@@ -80,6 +84,8 @@ impl TransactionStatus {
             "no_market" => Self::NoMarket,
             "too_small" => Self::TooSmall,
             "too_large" => Self::TooLarge,
+            "pending_stellar" => Self::PendingStellar,
+            "waiting_customer_action" => Self::WaitingCustomerAction,
             _ => Self::Error,
         }
     }
@@ -111,6 +117,8 @@ impl TransactionStatus {
             Self::NoMarket => "no_market",
             Self::TooSmall => "too_small",
             Self::TooLarge => "too_large",
+            Self::PendingStellar => "pending_stellar",
+            Self::WaitingCustomerAction => "waiting_customer_action",
             Self::Error => "error",
         }
     }
@@ -276,6 +284,28 @@ pub struct RawTransactionResponse {
     pub message: Option<String>,
 }
 
+// ── Optional-field validation ─────────────────────────────────────────────────
+
+/// Valid SEP-6 memo type strings.
+const VALID_MEMO_TYPES: &[&str] = &["text", "id", "hash"];
+
+/// Validate that whenever a memo value is present, a valid memo type is also present.
+/// Returns an error when:
+/// - `memo` is `Some` but `memo_type` is `None`
+/// - `memo_type` is `Some` but not one of `"text"`, `"id"`, `"hash"`
+fn validate_memo_pair(memo: Option<&str>, memo_type: Option<&str>) -> Result<(), crate::errors::Error> {
+    if memo.is_some() {
+        match memo_type {
+            None => return Err(crate::errors::Error::invalid_transaction_intent()),
+            Some(mt) if !VALID_MEMO_TYPES.contains(&mt) => {
+                return Err(crate::errors::Error::invalid_transaction_intent());
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 // ── Service functions ─────────────────────────────────────────────────────────
 
 /// Normalize a raw anchor deposit response into a canonical [`DepositResponse`].
@@ -322,6 +352,7 @@ pub fn initiate_deposit(raw: RawDepositResponse) -> Result<DepositResponse, Erro
     if raw.transaction_id.is_empty() || raw.how.is_empty() {
         return Err(Error::invalid_transaction_intent());
     }
+    validate_memo_pair(raw.stellar_memo.as_deref(), raw.stellar_memo_type.as_deref())?;
     let asset_code = raw.asset_code.as_deref()
         .map(normalize_asset_code)
         .transpose()?;
@@ -385,6 +416,7 @@ pub fn initiate_withdrawal(raw: RawWithdrawalResponse) -> Result<WithdrawalRespo
     if raw.transaction_id.is_empty() || raw.account_id.is_empty() {
         return Err(Error::invalid_transaction_intent());
     }
+    validate_memo_pair(raw.memo.as_deref(), raw.memo_type.as_deref())?;
     let asset_code = raw.asset_code.as_deref()
         .map(normalize_asset_code)
         .transpose()?;
@@ -881,6 +913,101 @@ mod tests {
         );
         assert_eq!(result, PollResult::Completed(make_response(TransactionStatus::Completed)));
         assert_eq!(call_count, 3);
+    }
+
+    // ── Optional field combination tests (#255) ───────────────────────────────
+
+    #[test]
+    fn test_deposit_memo_without_memo_type_is_rejected() {
+        let mut raw = raw_deposit();
+        raw.stellar_memo = Some("12345".to_string());
+        raw.stellar_memo_type = None;
+        assert_eq!(initiate_deposit(raw), Err(Error::invalid_transaction_intent()));
+    }
+
+    #[test]
+    fn test_deposit_memo_with_invalid_memo_type_is_rejected() {
+        let mut raw = raw_deposit();
+        raw.stellar_memo = Some("12345".to_string());
+        raw.stellar_memo_type = Some("fax".to_string()); // invalid type
+        assert_eq!(initiate_deposit(raw), Err(Error::invalid_transaction_intent()));
+    }
+
+    #[test]
+    fn test_deposit_memo_with_valid_text_type_is_accepted() {
+        let mut raw = raw_deposit();
+        raw.stellar_memo = Some("hello".to_string());
+        raw.stellar_memo_type = Some("text".to_string());
+        assert!(initiate_deposit(raw).is_ok());
+    }
+
+    #[test]
+    fn test_deposit_memo_with_valid_id_type_is_accepted() {
+        let mut raw = raw_deposit();
+        raw.stellar_memo = Some("99999".to_string());
+        raw.stellar_memo_type = Some("id".to_string());
+        assert!(initiate_deposit(raw).is_ok());
+    }
+
+    #[test]
+    fn test_deposit_memo_with_valid_hash_type_is_accepted() {
+        let mut raw = raw_deposit();
+        raw.stellar_memo = Some("abc123".to_string());
+        raw.stellar_memo_type = Some("hash".to_string());
+        assert!(initiate_deposit(raw).is_ok());
+    }
+
+    #[test]
+    fn test_deposit_no_memo_no_memo_type_is_accepted() {
+        let mut raw = raw_deposit();
+        raw.stellar_memo = None;
+        raw.stellar_memo_type = None;
+        assert!(initiate_deposit(raw).is_ok());
+    }
+
+    #[test]
+    fn test_withdrawal_memo_without_memo_type_is_rejected() {
+        let mut raw = raw_withdrawal();
+        raw.memo = Some("12345".to_string());
+        raw.memo_type = None;
+        assert_eq!(initiate_withdrawal(raw), Err(Error::invalid_transaction_intent()));
+    }
+
+    #[test]
+    fn test_withdrawal_memo_with_invalid_memo_type_is_rejected() {
+        let mut raw = raw_withdrawal();
+        raw.memo = Some("12345".to_string());
+        raw.memo_type = Some("telegraph".to_string());
+        assert_eq!(initiate_withdrawal(raw), Err(Error::invalid_transaction_intent()));
+    }
+
+    #[test]
+    fn test_withdrawal_memo_with_valid_id_type_is_accepted() {
+        let raw = raw_withdrawal(); // already has memo="12345" and memo_type="id"
+        assert!(initiate_withdrawal(raw).is_ok());
+    }
+
+    #[test]
+    fn test_withdrawal_no_memo_no_memo_type_is_accepted() {
+        let mut raw = raw_withdrawal();
+        raw.memo = None;
+        raw.memo_type = None;
+        assert!(initiate_withdrawal(raw).is_ok());
+    }
+
+    #[test]
+    fn test_status_pending_stellar_round_trip() {
+        assert_eq!(TransactionStatus::from_str("pending_stellar"), TransactionStatus::PendingStellar);
+        assert_eq!(TransactionStatus::PendingStellar.as_str(), "pending_stellar");
+    }
+
+    #[test]
+    fn test_status_waiting_customer_action_round_trip() {
+        assert_eq!(
+            TransactionStatus::from_str("waiting_customer_action"),
+            TransactionStatus::WaitingCustomerAction
+        );
+        assert_eq!(TransactionStatus::WaitingCustomerAction.as_str(), "waiting_customer_action");
     }
 
     #[test]

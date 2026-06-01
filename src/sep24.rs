@@ -594,4 +594,83 @@ mod tests {
         let result = fetch_sep24_transaction_status(raw).unwrap();
         assert_eq!(result.status, TransactionStatus::PendingUser);
     }
+
+    // ── Optional field combination tests (#255) ───────────────────────────────
+
+    #[test]
+    fn test_sep24_status_pending_stellar_accepted() {
+        let raw = RawSep24TransactionResponse {
+            id: "tx-stellar".to_string(),
+            status: "pending_stellar".to_string(),
+            more_info_url: None,
+            stellar_transaction_id: None,
+            asset_code: None,
+        };
+        let result = fetch_sep24_transaction_status(raw).unwrap();
+        assert_eq!(result.status, TransactionStatus::PendingStellar);
+    }
+
+    #[test]
+    fn test_sep24_status_waiting_customer_action_accepted() {
+        let raw = RawSep24TransactionResponse {
+            id: "tx-wca".to_string(),
+            status: "waiting_customer_action".to_string(),
+            more_info_url: None,
+            stellar_transaction_id: None,
+            asset_code: None,
+        };
+        let result = fetch_sep24_transaction_status(raw).unwrap();
+        assert_eq!(result.status, TransactionStatus::WaitingCustomerAction);
+    }
+
+    #[test]
+    fn test_sep24_stellar_tx_id_optional_absent_is_ok() {
+        let raw = RawSep24TransactionResponse {
+            id: "tx-no-stellar-id".to_string(),
+            status: "completed".to_string(),
+            more_info_url: None,
+            stellar_transaction_id: None,
+            asset_code: None,
+        };
+        let result = fetch_sep24_transaction_status(raw).unwrap();
+        assert!(result.stellar_transaction_id.is_none());
+    }
+
+    #[test]
+    fn test_sep24_stellar_tx_id_optional_present_is_propagated() {
+        let raw = RawSep24TransactionResponse {
+            id: "tx-has-stellar-id".to_string(),
+            status: "completed".to_string(),
+            more_info_url: None,
+            stellar_transaction_id: Some("stellar-abc-123".to_string()),
+            asset_code: None,
+        };
+        let result = fetch_sep24_transaction_status(raw).unwrap();
+        assert_eq!(result.stellar_transaction_id, Some("stellar-abc-123".to_string()));
+    }
+
+    #[test]
+    fn test_sep24_all_optional_fields_absent_accepted() {
+        let raw = RawSep24TransactionResponse {
+            id: "tx-minimal".to_string(),
+            status: "pending_anchor".to_string(),
+            more_info_url: None,
+            stellar_transaction_id: None,
+            asset_code: None,
+        };
+        assert!(fetch_sep24_transaction_status(raw).is_ok());
+    }
+
+    #[test]
+    fn test_sep24_unknown_status_maps_to_error_variant() {
+        let raw = RawSep24TransactionResponse {
+            id: "tx-unk".to_string(),
+            status: "some_future_status".to_string(),
+            more_info_url: None,
+            stellar_transaction_id: None,
+            asset_code: None,
+        };
+        let result = fetch_sep24_transaction_status(raw).unwrap();
+        assert_eq!(result.status, TransactionStatus::Error);
+    }
 }
