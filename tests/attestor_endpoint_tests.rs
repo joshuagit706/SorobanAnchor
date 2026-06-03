@@ -1,10 +1,12 @@
-use super::*;
+#[path = "sep10_test_util.rs"]
+mod sep10_test_util;
+
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _, LedgerInfo},
     Address, BytesN, Bytes, Env, String,
 };
-use crate::contract::{AnchorKitContract, AnchorKitContractClient};
-use crate::sep10_test_util::{build_sep10_jwt, register_attestor_with_sep10, sign_payload};
+use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient};
+use sep10_test_util::{build_sep10_jwt, register_attestor_with_sep10, sign_payload};
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 

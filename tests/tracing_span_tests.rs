@@ -11,7 +11,7 @@ mod tracing_span_tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient};
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient};
     use crate::sep10_test_util::{register_attestor_with_sep10, sign_payload};
 
     fn make_env() -> Env {
@@ -415,7 +415,7 @@ mod tracing_span_tests {
     // #241 — Span lineage validation
     // -----------------------------------------------------------------------
 
-    fn setup_with_root_span(env: &Env) -> (AnchorKitContractClient<'_>, Address, crate::contract::RequestId) {
+    fn setup_with_root_span(env: &Env) -> (AnchorKitContractClient<'_>, Address, anchorkit::contract::RequestId) {
         env.ledger().set(LedgerInfo {
             timestamp: 2000,
             protocol_version: 21,

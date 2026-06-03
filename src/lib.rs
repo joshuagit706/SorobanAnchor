@@ -125,9 +125,12 @@ pub mod errors;
 pub mod sep10_jwt;
 pub mod rate_limiter;
 pub mod retry;
+pub mod replay_detection;
 pub mod transaction_state_tracker;
 pub mod contract;
 pub mod anchor_health;
+pub mod service_management;
+pub mod admin_audit_log;
 
 // ── std-only modules (filesystem, runtime config) ─────────────────────────────
 #[cfg(feature = "std")]
@@ -137,6 +140,8 @@ pub mod config;
 // Excluded from `wasm` builds: on-chain Soroban contracts have no network access.
 #[cfg(not(feature = "wasm"))]
 mod response_validator;
+#[cfg(not(feature = "wasm"))]
+pub mod http_client;
 #[cfg(not(feature = "wasm"))]
 pub mod webhook;
 #[cfg(not(feature = "wasm"))]
@@ -174,6 +179,8 @@ pub use config::{load_runtime_config_file, parse_runtime_config_str, ConfigForma
 
 // ── Host-only re-exports ──────────────────────────────────────────────────────
 #[cfg(not(feature = "wasm"))]
+pub use http_client::{ProxyConfig, build_client, fetch_stellar_toml_with_proxy, deliver_webhook_with_proxy};
+#[cfg(not(feature = "wasm"))]
 pub use response_validator::{
     validate_anchor_info_response, validate_deposit_response, validate_quote_response,
     validate_sep38_quote_response, validate_withdraw_response, validate_stellar_asset,
@@ -199,22 +206,12 @@ pub use sep24::{
     InteractiveDepositResponse, InteractiveWithdrawalResponse, Sep24TransactionStatusResponse,
     RawInteractiveDepositResponse, RawInteractiveWithdrawalResponse, RawSep24TransactionResponse,
 };
-pub use contract::{AnchorKitContract, EndpointUpdated, CacheConfig, ServiceRetirementInfo, AnchorServices};
+pub use contract::{ServiceRetirementInfo, AnchorServices};
 pub use contract::{HealthStatus, MetadataFreshnessReport, RateLimiterHealth};
 pub use contract::{AnchorHealthMetrics, AnchorProofRecord};
-pub use transaction_state_tracker::{TransactionState, TransactionStateRecord, RecoveryMetadata};
-pub use transaction_state_tracker::{
-    StorageBudgetMonitor, TransactionStateTracker, BudgetStatus, BudgetAlert,
-};
-pub use transaction_state_tracker::TransactionSummary;
-pub mod streaming_monitor;
+pub use transaction_state_tracker::{BudgetStatus, BudgetAlert};
+#[cfg(not(feature = "wasm"))]
 pub use streaming_monitor::{StreamingTransactionMonitor, TransactionStatusUpdate};
 
 #[cfg(test)]
 mod stellar_toml_tests;
-
-#[cfg(test)]
-mod ledger_boundary_tests;
-
-#[cfg(test)]
-mod boundary_test_helpers;

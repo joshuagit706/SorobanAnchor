@@ -11,7 +11,7 @@ mod replay_protection_tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient};
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient};
     use crate::sep10_test_util::register_attestor_with_sep10;
 
     fn make_env() -> Env {
@@ -92,7 +92,7 @@ mod replay_protection_tests {
         assert_eq!(metrics.unique_replayed_ids, 1);
         assert_eq!(metrics.last_updated_ledger, 0);
 
-        let replayed_count = client.get_replay_count_for_id(hash.clone());
+        let replayed_count = client.get_replay_count_for_id(&hash);
         assert_eq!(replayed_count, 1);
     }
 

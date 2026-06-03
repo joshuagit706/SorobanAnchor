@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use serde::Serialize;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind, Read};
+use anchorkit::normalize_stellar_account_id;
 
 // ── SecretKey wrapper ─────────────────────────────────────────────────────────
 //
@@ -520,7 +521,7 @@ fn stellar_invoke(
     let output = std::process::Command::new("stellar")
         .args(["contract", "invoke",
                "--id", contract_id,
-               "--source", &**source,
+               "--source", source,
                "--rpc-url", &url,
                "--network-passphrase", &phrase,
                "--"])
@@ -699,6 +700,27 @@ enum Commands {
         #[arg(long)] no_proxy: Option<String>,
         /// Request timeout in seconds (default: 30)
         #[arg(long, default_value = "30")] timeout: u64,
+    },
+    /// Offline operations (config validation, workflow simulation) — no network required
+    Offline {
+        #[command(subcommand)]
+        action: OfflineAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum OfflineAction {
+    /// Validate config files without network access
+    Validate {
+        /// Path to a specific config file (validates all in configs/ when omitted)
+        #[arg(long)] config: Option<String>,
+    },
+    /// Simulate a named workflow without network access
+    Simulate {
+        /// Path to a config file (uses configs/ when omitted)
+        #[arg(long)] config: Option<String>,
+        /// Workflow name: deploy | register | attest
+        #[arg(long)] workflow: String,
     },
 }
 
@@ -898,9 +920,10 @@ fn upgrade_contract(contract_id: &str, network: &str, source: &SecretKey) {
         "--new_wasm_hash", &new_wasm_hash,
     ]);
 
-    // Call migrate() to apply state-schema changes (idempotent).
+    // Call migrate() to apply state-schema changes.
+    // Pass new_schema_version = 1 for the initial migration after upgrade.
     println!("Calling migrate() on contract {contract_id}...");
-    stellar_invoke(contract_id, source, network, &["migrate"]);
+    stellar_invoke(contract_id, source, network, &["migrate", "--new_schema_version", "1"]);
 
     println!("✅ Contract upgraded successfully.");
     println!("   Contract ID : {contract_id}");
@@ -1948,7 +1971,7 @@ mod secret_resolution_tests {
     use super::*;
 
     fn no_env(_: &str) -> Option<String> { None }
-    fn env_with(key: &str, value: &str) -> impl Fn(&str) -> Option<String> + '_ {
+    fn env_with<'a>(key: &'a str, value: &'a str) -> impl Fn(&str) -> Option<String> + 'a {
         move |k: &str| if k == key { Some(value.to_string()) } else { None }
     }
 

@@ -11,7 +11,7 @@ mod request_id_tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient};
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient};
     use crate::sep10_test_util::{register_attestor_with_sep10, sign_payload};
 
     fn make_env() -> Env {
@@ -508,7 +508,7 @@ mod request_id_tests {
 
     #[test]
     fn test_new_error_code_discriminants() {
-        use crate::errors::ErrorCode;
+        use anchorkit::errors::ErrorCode;
         assert_eq!(ErrorCode::AttestorProfileNotFound as u32, 50);
         assert_eq!(ErrorCode::InvalidRequestContext   as u32, 51);
         assert_eq!(ErrorCode::InvalidSessionMetadata  as u32, 52);
@@ -516,7 +516,7 @@ mod request_id_tests {
 
     #[test]
     fn test_new_error_code_messages_non_empty() {
-        use crate::errors::ErrorCode;
+        use anchorkit::errors::ErrorCode;
         assert!(!ErrorCode::AttestorProfileNotFound.default_message().is_empty());
         assert!(!ErrorCode::InvalidRequestContext.default_message().is_empty());
         assert!(!ErrorCode::InvalidSessionMetadata.default_message().is_empty());

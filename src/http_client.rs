@@ -100,6 +100,11 @@ pub fn build_client(
     if let Some(cfg) = proxy {
         if let Some(ref url) = cfg.proxy_url {
             if !url.is_empty() {
+                if !url.starts_with("http://") && !url.starts_with("https://") {
+                    return Err(alloc::format!(
+                        "invalid proxy URL '{}': must start with http:// or https://", url
+                    ));
+                }
                 let mut proxy_obj = reqwest::Proxy::all(url.as_str())
                     .map_err(|e| alloc::format!("invalid proxy URL '{}': {}", url, e))?;
 
@@ -260,7 +265,7 @@ pub fn deliver_webhook_with_proxy(
             client
                 .post(url)
                 .header("Content-Type", "application/json")
-                .body(body.to_string())
+                .body(alloc::string::String::from(body))
                 .send()
                 .map(|r| r.status().as_u16())
                 .map_err(|e| alloc::format!("HTTP POST failed: {}", e))
@@ -277,6 +282,7 @@ pub fn deliver_webhook_with_proxy(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::string::ToString;
 
     #[test]
     fn proxy_config_default_is_unconfigured() {

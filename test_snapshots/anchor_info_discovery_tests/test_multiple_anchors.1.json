@@ -4,6 +4,513 @@
     "nonce": 0
   },
   "auth": [
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "fetch_anchor_info",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "accounts"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "string": "GANCHOR1"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "currencies"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "code"
+                                },
+                                "val": {
+                                  "string": "USDC"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 100
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 10
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_max_amount"
+                                },
+                                "val": {
+                                  "u64": 1000000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_min_amount"
+                                },
+                                "val": {
+                                  "u64": 1000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "issuer"
+                                },
+                                "val": {
+                                  "string": "GABC123"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 50
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 5
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_max_amount"
+                                },
+                                "val": {
+                                  "u64": 500000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_min_amount"
+                                },
+                                "val": {
+                                  "u64": 500
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "code"
+                                },
+                                "val": {
+                                  "string": "XLM"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_max_amount"
+                                },
+                                "val": {
+                                  "u64": 10000000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_min_amount"
+                                },
+                                "val": {
+                                  "u64": 100
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "issuer"
+                                },
+                                "val": {
+                                  "string": "native"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_max_amount"
+                                },
+                                "val": {
+                                  "u64": 10000000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_min_amount"
+                                },
+                                "val": {
+                                  "u64": 100
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "kyc_server"
+                      },
+                      "val": {
+                        "string": "https://kyc.example.com"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "network_passphrase"
+                      },
+                      "val": {
+                        "string": "Test SDF Network ; September 2015"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "signing_key"
+                      },
+                      "val": {
+                        "string": "GSIGN123"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "transfer_server"
+                      },
+                      "val": {
+                        "string": "https://api.example.com"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "transfer_server_sep0024"
+                      },
+                      "val": {
+                        "string": "https://api.example.com/sep24"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "version"
+                      },
+                      "val": {
+                        "string": "2.0.0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "web_auth_endpoint"
+                      },
+                      "val": {
+                        "string": "https://auth.example.com"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "u64": 3600
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "fetch_anchor_info",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "accounts"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "string": "GANCHOR2"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "currencies"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "code"
+                                },
+                                "val": {
+                                  "string": "USDC"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 200
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 20
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_max_amount"
+                                },
+                                "val": {
+                                  "u64": 500000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_min_amount"
+                                },
+                                "val": {
+                                  "u64": 500
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "issuer"
+                                },
+                                "val": {
+                                  "string": "GOTHER"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_enabled"
+                                },
+                                "val": {
+                                  "bool": false
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_max_amount"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_min_amount"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "kyc_server"
+                      },
+                      "val": {
+                        "string": "https://kyc2.example.com"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "network_passphrase"
+                      },
+                      "val": {
+                        "string": "Test SDF Network ; September 2015"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "signing_key"
+                      },
+                      "val": {
+                        "string": "GSIGN456"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "transfer_server"
+                      },
+                      "val": {
+                        "string": "https://api2.example.com"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "transfer_server_sep0024"
+                      },
+                      "val": {
+                        "string": "https://api2.example.com/sep24"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "version"
+                      },
+                      "val": {
+                        "string": "2.0.0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "web_auth_endpoint"
+                      },
+                      "val": {
+                        "string": "https://auth2.example.com"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "u64": 3600
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [],
     []
   ],
   "ledger": {
@@ -422,7 +929,7 @@
                             "val": {
                               "vec": [
                                 {
-                                  "string": "GANCHOR1"
+                                  "string": "GANCHOR2"
                                 }
                               ]
                             }
@@ -456,7 +963,7 @@
                                         "symbol": "deposit_fee_fixed"
                                       },
                                       "val": {
-                                        "u64": 100
+                                        "u64": 200
                                       }
                                     },
                                     {
@@ -464,60 +971,12 @@
                                         "symbol": "deposit_fee_percent"
                                       },
                                       "val": {
-                                        "u32": 10
+                                        "u32": 20
                                       }
                                     },
                                     {
                                       "key": {
                                         "symbol": "deposit_max_amount"
-                                      },
-                                      "val": {
-                                        "u64": 1000000
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "deposit_min_amount"
-                                      },
-                                      "val": {
-                                        "u64": 1000
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "issuer"
-                                      },
-                                      "val": {
-                                        "string": "GABC123"
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "withdrawal_enabled"
-                                      },
-                                      "val": {
-                                        "bool": true
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "withdrawal_fee_fixed"
-                                      },
-                                      "val": {
-                                        "u64": 50
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "withdrawal_fee_percent"
-                                      },
-                                      "val": {
-                                        "u32": 5
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "withdrawal_max_amount"
                                       },
                                       "val": {
                                         "u64": 500000
@@ -525,62 +984,10 @@
                                     },
                                     {
                                       "key": {
-                                        "symbol": "withdrawal_min_amount"
-                                      },
-                                      "val": {
-                                        "u64": 500
-                                      }
-                                    }
-                                  ]
-                                },
-                                {
-                                  "map": [
-                                    {
-                                      "key": {
-                                        "symbol": "code"
-                                      },
-                                      "val": {
-                                        "string": "XLM"
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "deposit_enabled"
-                                      },
-                                      "val": {
-                                        "bool": true
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "deposit_fee_fixed"
-                                      },
-                                      "val": {
-                                        "u64": 0
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "deposit_fee_percent"
-                                      },
-                                      "val": {
-                                        "u32": 0
-                                      }
-                                    },
-                                    {
-                                      "key": {
-                                        "symbol": "deposit_max_amount"
-                                      },
-                                      "val": {
-                                        "u64": 10000000
-                                      }
-                                    },
-                                    {
-                                      "key": {
                                         "symbol": "deposit_min_amount"
                                       },
                                       "val": {
-                                        "u64": 100
+                                        "u64": 500
                                       }
                                     },
                                     {
@@ -588,7 +995,7 @@
                                         "symbol": "issuer"
                                       },
                                       "val": {
-                                        "string": "native"
+                                        "string": "GOTHER"
                                       }
                                     },
                                     {
@@ -596,7 +1003,7 @@
                                         "symbol": "withdrawal_enabled"
                                       },
                                       "val": {
-                                        "bool": true
+                                        "bool": false
                                       }
                                     },
                                     {
@@ -620,7 +1027,7 @@
                                         "symbol": "withdrawal_max_amount"
                                       },
                                       "val": {
-                                        "u64": 10000000
+                                        "u64": 0
                                       }
                                     },
                                     {
@@ -628,7 +1035,7 @@
                                         "symbol": "withdrawal_min_amount"
                                       },
                                       "val": {
-                                        "u64": 100
+                                        "u64": 0
                                       }
                                     }
                                   ]
@@ -641,7 +1048,7 @@
                               "symbol": "kyc_server"
                             },
                             "val": {
-                              "string": "https://kyc.example.com"
+                              "string": "https://kyc2.example.com"
                             }
                           },
                           {
@@ -657,7 +1064,7 @@
                               "symbol": "signing_key"
                             },
                             "val": {
-                              "string": "GSIGN123"
+                              "string": "GSIGN456"
                             }
                           },
                           {
@@ -665,7 +1072,7 @@
                               "symbol": "transfer_server"
                             },
                             "val": {
-                              "string": "https://api.example.com"
+                              "string": "https://api2.example.com"
                             }
                           },
                           {
@@ -673,7 +1080,7 @@
                               "symbol": "transfer_server_sep0024"
                             },
                             "val": {
-                              "string": "https://api.example.com/sep24"
+                              "string": "https://api2.example.com/sep24"
                             }
                           },
                           {
@@ -689,7 +1096,7 @@
                               "symbol": "web_auth_endpoint"
                             },
                             "val": {
-                              "string": "https://auth.example.com"
+                              "string": "https://auth2.example.com"
                             }
                           }
                         ]
@@ -746,6 +1153,72 @@
       ],
       [
         {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": 801925984706572462
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 801925984706572462
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": 5541220902715666415
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 5541220902715666415
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
           "contract_code": {
             "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }
@@ -767,5 +1240,882 @@
       ]
     ]
   },
-  "events": []
+  "events": [
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "fetch_anchor_info"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "accounts"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "string": "GANCHOR1"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "currencies"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "code"
+                                },
+                                "val": {
+                                  "string": "USDC"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 100
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 10
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_max_amount"
+                                },
+                                "val": {
+                                  "u64": 1000000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_min_amount"
+                                },
+                                "val": {
+                                  "u64": 1000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "issuer"
+                                },
+                                "val": {
+                                  "string": "GABC123"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 50
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 5
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_max_amount"
+                                },
+                                "val": {
+                                  "u64": 500000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_min_amount"
+                                },
+                                "val": {
+                                  "u64": 500
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "code"
+                                },
+                                "val": {
+                                  "string": "XLM"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_max_amount"
+                                },
+                                "val": {
+                                  "u64": 10000000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_min_amount"
+                                },
+                                "val": {
+                                  "u64": 100
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "issuer"
+                                },
+                                "val": {
+                                  "string": "native"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_max_amount"
+                                },
+                                "val": {
+                                  "u64": 10000000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_min_amount"
+                                },
+                                "val": {
+                                  "u64": 100
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "kyc_server"
+                      },
+                      "val": {
+                        "string": "https://kyc.example.com"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "network_passphrase"
+                      },
+                      "val": {
+                        "string": "Test SDF Network ; September 2015"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "signing_key"
+                      },
+                      "val": {
+                        "string": "GSIGN123"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "transfer_server"
+                      },
+                      "val": {
+                        "string": "https://api.example.com"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "transfer_server_sep0024"
+                      },
+                      "val": {
+                        "string": "https://api.example.com/sep24"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "version"
+                      },
+                      "val": {
+                        "string": "2.0.0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "web_auth_endpoint"
+                      },
+                      "val": {
+                        "string": "https://auth.example.com"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "u64": 3600
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "fetch_anchor_info"
+              }
+            ],
+            "data": "void"
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "fetch_anchor_info"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "accounts"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "string": "GANCHOR2"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "currencies"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "code"
+                                },
+                                "val": {
+                                  "string": "USDC"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_enabled"
+                                },
+                                "val": {
+                                  "bool": true
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 200
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 20
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_max_amount"
+                                },
+                                "val": {
+                                  "u64": 500000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deposit_min_amount"
+                                },
+                                "val": {
+                                  "u64": 500
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "issuer"
+                                },
+                                "val": {
+                                  "string": "GOTHER"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_enabled"
+                                },
+                                "val": {
+                                  "bool": false
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_fixed"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_fee_percent"
+                                },
+                                "val": {
+                                  "u32": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_max_amount"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "withdrawal_min_amount"
+                                },
+                                "val": {
+                                  "u64": 0
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "kyc_server"
+                      },
+                      "val": {
+                        "string": "https://kyc2.example.com"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "network_passphrase"
+                      },
+                      "val": {
+                        "string": "Test SDF Network ; September 2015"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "signing_key"
+                      },
+                      "val": {
+                        "string": "GSIGN456"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "transfer_server"
+                      },
+                      "val": {
+                        "string": "https://api2.example.com"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "transfer_server_sep0024"
+                      },
+                      "val": {
+                        "string": "https://api2.example.com/sep24"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "version"
+                      },
+                      "val": {
+                        "string": "2.0.0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "web_auth_endpoint"
+                      },
+                      "val": {
+                        "string": "https://auth2.example.com"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "u64": 3600
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "fetch_anchor_info"
+              }
+            ],
+            "data": "void"
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "get_anchor_asset_info"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "string": "USDC"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "get_anchor_asset_info"
+              }
+            ],
+            "data": {
+              "map": [
+                {
+                  "key": {
+                    "symbol": "code"
+                  },
+                  "val": {
+                    "string": "USDC"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_enabled"
+                  },
+                  "val": {
+                    "bool": true
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_fee_fixed"
+                  },
+                  "val": {
+                    "u64": 100
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_fee_percent"
+                  },
+                  "val": {
+                    "u32": 10
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_max_amount"
+                  },
+                  "val": {
+                    "u64": 1000000
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_min_amount"
+                  },
+                  "val": {
+                    "u64": 1000
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "issuer"
+                  },
+                  "val": {
+                    "string": "GABC123"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_enabled"
+                  },
+                  "val": {
+                    "bool": true
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_fee_fixed"
+                  },
+                  "val": {
+                    "u64": 50
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_fee_percent"
+                  },
+                  "val": {
+                    "u32": 5
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_max_amount"
+                  },
+                  "val": {
+                    "u64": 500000
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_min_amount"
+                  },
+                  "val": {
+                    "u64": 500
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "get_anchor_asset_info"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "string": "USDC"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "get_anchor_asset_info"
+              }
+            ],
+            "data": {
+              "map": [
+                {
+                  "key": {
+                    "symbol": "code"
+                  },
+                  "val": {
+                    "string": "USDC"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_enabled"
+                  },
+                  "val": {
+                    "bool": true
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_fee_fixed"
+                  },
+                  "val": {
+                    "u64": 200
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_fee_percent"
+                  },
+                  "val": {
+                    "u32": 20
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_max_amount"
+                  },
+                  "val": {
+                    "u64": 500000
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "deposit_min_amount"
+                  },
+                  "val": {
+                    "u64": 500
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "issuer"
+                  },
+                  "val": {
+                    "string": "GOTHER"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_enabled"
+                  },
+                  "val": {
+                    "bool": false
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_fee_fixed"
+                  },
+                  "val": {
+                    "u64": 0
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_fee_percent"
+                  },
+                  "val": {
+                    "u32": 0
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_max_amount"
+                  },
+                  "val": {
+                    "u64": 0
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "withdrawal_min_amount"
+                  },
+                  "val": {
+                    "u64": 0
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    }
+  ]
 }

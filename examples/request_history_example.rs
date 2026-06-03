@@ -42,16 +42,16 @@ fn main() {
     println!("4. Registering attestors within session...");
     let pk1 = BytesN::from_array(&env, &[1u8; 32]);
     let pk2 = BytesN::from_array(&env, &[2u8; 32]);
-    client.register_attestor_with_session(&session_id, &attestor1, &pk1);
+    client.register_attestor_with_session(&admin, &session_id, &attestor1, &pk1);
     println!("   ✓ Attestor 1 registered");
 
-    client.register_attestor_with_session(&session_id, &attestor2, &pk2);
+    client.register_attestor_with_session(&admin, &session_id, &attestor2, &pk2);
     println!("   ✓ Attestor 2 registered\n");
 
     println!("5. Submitting attestations with request ID tracking...");
     let timestamp = env.ledger().timestamp();
-    let payload_hash1 = BytesN::from_array(&env, &[1u8; 32]);
-    let payload_hash2 = BytesN::from_array(&env, &[2u8; 32]);
+    let payload_hash1 = Bytes::from_slice(&env, &[1u8; 32]);
+    let payload_hash2 = Bytes::from_slice(&env, &[2u8; 32]);
     let signature = Bytes::new(&env);
 
     // Generate request ID for first attestation
@@ -88,10 +88,10 @@ fn main() {
     let span1 = client.get_tracing_span(&request_id1.id);
     if let Some(span) = span1 {
         println!("\n   === TRACING SPAN 1 ===");
-        println!("   Operation: {}", span.operation.to_string());
+        println!("   Operation: {:?}", span.operation);
         println!("   Started at: {}", span.started_at);
         println!("   Completed at: {}", span.completed_at);
-        println!("   Status: {}", span.status.to_string());
+        println!("   Status: {:?}", span.status);
         println!("   Duration: {} seconds", span.completed_at - span.started_at);
     } else {
         println!("   ⚠ No tracing span found for request 1");
@@ -101,10 +101,10 @@ fn main() {
     let span2 = client.get_tracing_span(&request_id2.id);
     if let Some(span) = span2 {
         println!("\n   === TRACING SPAN 2 ===");
-        println!("   Operation: {}", span.operation.to_string());
+        println!("   Operation: {:?}", span.operation);
         println!("   Started at: {}", span.started_at);
         println!("   Completed at: {}", span.completed_at);
-        println!("   Status: {}", span.status.to_string());
+        println!("   Status: {:?}", span.status);
         println!("   Duration: {} seconds", span.completed_at - span.started_at);
     } else {
         println!("   ⚠ No tracing span found for request 2");
@@ -141,7 +141,7 @@ fn main() {
     // Generate request ID for quote
     let quote_request_id = client.generate_request_id();
 
-    let quote_id = client.quote_with_request_id(
+    client.quote_with_request_id(
         &quote_request_id,
         &attestor1,
         &base_asset,
@@ -152,14 +152,14 @@ fn main() {
         &maximum_amount,
         &valid_until,
     );
-    println!("   ✓ Quote submitted with tracking (ID: {})", quote_id);
+    println!("   ✓ Quote submitted with tracking");
 
     // Get tracing span for quote
     let quote_span = client.get_tracing_span(&quote_request_id.id);
     if let Some(span) = quote_span {
         println!("\n   === QUOTE TRACING SPAN ===");
-        println!("   Operation: {}", span.operation.to_string());
-        println!("   Status: {}", span.status.to_string());
+        println!("   Operation: {:?}", span.operation);
+        println!("   Status: {:?}", span.status);
         println!("   Duration: {} seconds", span.completed_at - span.started_at);
     }
 

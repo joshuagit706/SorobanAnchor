@@ -11,7 +11,7 @@ mod streaming_flow_tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient};
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient};
     use crate::sep10_test_util::{register_attestor_with_sep10, sign_payload};
 
     fn make_env() -> Env {

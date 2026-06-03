@@ -23,7 +23,7 @@
           "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
-              "bytes": "f36ca94889cb4ccf6e7e78cd299d1524e85f2c86efa8e2998babd83afa8faf7a"
+              "bytes": "9b7867ba9eceebb3409885bdb64f3babb26d26b560c6c25291e9dace9a0bd37d"
             },
             "durability": "persistent"
           }
@@ -36,7 +36,7 @@
                 "ext": "v0",
                 "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
                 "key": {
-                  "bytes": "f36ca94889cb4ccf6e7e78cd299d1524e85f2c86efa8e2998babd83afa8faf7a"
+                  "bytes": "9b7867ba9eceebb3409885bdb64f3babb26d26b560c6c25291e9dace9a0bd37d"
                 },
                 "durability": "persistent",
                 "val": {

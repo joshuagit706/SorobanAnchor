@@ -227,8 +227,9 @@ pub fn emit_replay_detection_log(env: &Env, event: &ReplayDetectionEvent) {
 mod tests {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+    use crate::contract::AnchorKitContract;
 
-    fn make_test_env() -> Env {
+    fn make_test_env() -> (Env, soroban_sdk::Address) {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().set(LedgerInfo {
@@ -241,16 +242,17 @@ mod tests {
             min_temp_entry_ttl: 16,
             max_entry_ttl: 6312000,
         });
-        env
+        let cid = env.register_contract(None, AnchorKitContract);
+        (env, cid)
     }
 
     #[test]
     fn test_record_first_replay_detection() {
-        let env = make_test_env();
+        let (env, cid) = make_test_env();
         let request_id = Bytes::from_slice(&env, &[0x01, 0x02, 0x03]);
         let actor = Address::generate(&env);
 
-        let event = record_replay_detection(&env, &request_id, &actor);
+        let event = env.as_contract(&cid, || record_replay_detection(&env, &request_id, &actor));
 
         assert_eq!(event.attempt_count, 1);
         assert_eq!(event.detected_at, 1_000_000);
@@ -259,60 +261,57 @@ mod tests {
 
     #[test]
     fn test_replay_metrics_accumulate() {
-        let env = make_test_env();
+        let (env, cid) = make_test_env();
         let request_id = Bytes::from_slice(&env, &[0x01, 0x02, 0x03]);
         let actor = Address::generate(&env);
 
-        // First replay
-        record_replay_detection(&env, &request_id, &actor);
+        env.as_contract(&cid, || { record_replay_detection(&env, &request_id, &actor); });
+        env.as_contract(&cid, || { record_replay_detection(&env, &request_id, &actor); });
 
-        // Second replay of same ID
-        record_replay_detection(&env, &request_id, &actor);
-
-        let metrics = get_replay_metrics(&env);
+        let metrics = env.as_contract(&cid, || get_replay_metrics(&env));
         assert_eq!(metrics.total_replay_attempts, 2);
         assert_eq!(metrics.unique_replayed_ids, 1);
     }
 
     #[test]
     fn test_multiple_request_ids_tracked() {
-        let env = make_test_env();
+        let (env, cid) = make_test_env();
         let req_id_1 = Bytes::from_slice(&env, &[0x01]);
         let req_id_2 = Bytes::from_slice(&env, &[0x02]);
         let actor = Address::generate(&env);
 
-        record_replay_detection(&env, &req_id_1, &actor);
-        record_replay_detection(&env, &req_id_2, &actor);
+        env.as_contract(&cid, || { record_replay_detection(&env, &req_id_1, &actor); });
+        env.as_contract(&cid, || { record_replay_detection(&env, &req_id_2, &actor); });
 
-        let metrics = get_replay_metrics(&env);
+        let metrics = env.as_contract(&cid, || get_replay_metrics(&env));
         assert_eq!(metrics.total_replay_attempts, 2);
         assert_eq!(metrics.unique_replayed_ids, 2);
     }
 
     #[test]
     fn test_get_replay_count_for_id() {
-        let env = make_test_env();
+        let (env, cid) = make_test_env();
         let request_id = Bytes::from_slice(&env, &[0x05]);
         let actor = Address::generate(&env);
 
-        assert_eq!(get_replay_count_for_id(&env, &request_id), 0);
+        assert_eq!(env.as_contract(&cid, || get_replay_count_for_id(&env, &request_id)), 0);
 
-        record_replay_detection(&env, &request_id, &actor);
-        assert_eq!(get_replay_count_for_id(&env, &request_id), 1);
+        env.as_contract(&cid, || { record_replay_detection(&env, &request_id, &actor); });
+        assert_eq!(env.as_contract(&cid, || get_replay_count_for_id(&env, &request_id)), 1);
 
-        record_replay_detection(&env, &request_id, &actor);
-        assert_eq!(get_replay_count_for_id(&env, &request_id), 2);
+        env.as_contract(&cid, || { record_replay_detection(&env, &request_id, &actor); });
+        assert_eq!(env.as_contract(&cid, || get_replay_count_for_id(&env, &request_id)), 2);
     }
 
     #[test]
     fn test_replay_event_retrieval() {
-        let env = make_test_env();
+        let (env, cid) = make_test_env();
         let request_id = Bytes::from_slice(&env, &[0x10]);
         let actor = Address::generate(&env);
 
-        record_replay_detection(&env, &request_id, &actor);
+        env.as_contract(&cid, || { record_replay_detection(&env, &request_id, &actor); });
 
-        let event_opt = get_replay_event(&env, 0);
+        let event_opt = env.as_contract(&cid, || get_replay_event(&env, 0));
         assert!(event_opt.is_some());
         let event = event_opt.unwrap();
         assert_eq!(event.attempt_number, 1);

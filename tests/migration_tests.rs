@@ -11,10 +11,10 @@
 
 mod migration_tests {
     use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-    use soroban_sdk::{Address, BytesN, Env};
+    use soroban_sdk::{Address, BytesN, Env, IntoVal};
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient, Attestation, Quote};
-    use crate::errors::ErrorCode;
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient, Attestation, Quote};
+    use anchorkit::errors::ErrorCode;
 
     // -----------------------------------------------------------------------
     // Helpers
@@ -108,8 +108,8 @@ mod migration_tests {
         client.initialize(&admin);
 
         let anchor = Address::generate(&env);
-        let base_asset = soroban_sdk::String::from_small_str("USD");
-        let quote_asset = soroban_sdk::String::from_small_str("EUR");
+        let base_asset = soroban_sdk::String::from_str(&env, "USD");
+        let quote_asset = soroban_sdk::String::from_str(&env, "USD");
 
         // Submit a quote before upgrade
         let quote_id = client.submit_quote(
@@ -124,7 +124,7 @@ mod migration_tests {
         );
 
         // Verify quote exists
-        let quote = client.get_quote(&quote_id);
+        let quote = client.get_quote(&anchor, &quote_id);
         assert_eq!(quote.anchor, anchor);
         assert_eq!(quote.rate, 100u64);
 
@@ -132,7 +132,7 @@ mod migration_tests {
         client.upgrade(&dummy_wasm_hash(&env));
 
         // Verify quote is still accessible after upgrade
-        let quote_after = client.get_quote(&quote_id);
+        let quote_after = client.get_quote(&anchor, &quote_id);
         assert_eq!(quote_after.anchor, anchor);
         assert_eq!(quote_after.rate, 100u64);
         assert_eq!(quote_after.fee_percentage, 5u32);
@@ -149,7 +149,7 @@ mod migration_tests {
         let initiator = Address::generate(&env);
 
         // Create a session before upgrade
-        let session_id = client.create_session(&initiator, &3600u64);
+        let session_id = client.create_session(&initiator);
 
         // Verify session exists
         let session = client.get_session(&session_id);
@@ -273,8 +273,8 @@ mod migration_tests {
         let anchor = Address::generate(&env);
         let quote_id = client.submit_quote(
             &anchor,
-            &soroban_sdk::String::from_small_str("USD"),
-            &soroban_sdk::String::from_small_str("EUR"),
+            &soroban_sdk::String::from_str(&env, "USD"),
+            &soroban_sdk::String::from_str(&env, "USD"),
             &100u64,
             &5u32,
             &1000u64,
@@ -283,7 +283,7 @@ mod migration_tests {
         );
 
         let initiator = Address::generate(&env);
-        let session_id = client.create_session(&initiator, &3600u64);
+        let session_id = client.create_session(&initiator);
 
         // Upgrade contract
         client.upgrade(&dummy_wasm_hash(&env));
@@ -292,7 +292,7 @@ mod migration_tests {
         let attestation = client.get_attestation(&attestation_id);
         assert_eq!(attestation.issuer, issuer);
 
-        let quote = client.get_quote(&quote_id);
+        let quote = client.get_quote(&anchor, &quote_id);
         assert_eq!(quote.anchor, anchor);
 
         let session = client.get_session(&session_id);
@@ -393,8 +393,8 @@ mod migration_tests {
         let anchor = Address::generate(&env);
         let quote_id = client.submit_quote(
             &anchor,
-            &soroban_sdk::String::from_small_str("USD"),
-            &soroban_sdk::String::from_small_str("EUR"),
+            &soroban_sdk::String::from_str(&env, "USD"),
+            &soroban_sdk::String::from_str(&env, "USD"),
             &100u64,
             &5u32,
             &1000u64,
@@ -402,7 +402,7 @@ mod migration_tests {
             &2000u64,
         );
 
-        let quote = client.get_quote(&quote_id);
+        let quote = client.get_quote(&anchor, &quote_id);
         // Schema version should be set
         assert!(quote.schema_version > 0);
     }

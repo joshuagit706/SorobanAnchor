@@ -5,7 +5,7 @@ mod sep10_test_util;
 
 mod readiness_tests {
     use soroban_sdk::{
-        testutils::{Address as _, LedgerInfo},
+        testutils::{Address as _, Ledger as _, LedgerInfo},
         Address, Env, Vec,
     };
 

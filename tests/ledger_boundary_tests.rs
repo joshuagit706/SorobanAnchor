@@ -1,13 +1,16 @@
+// Ledger boundary condition tests
+//
+// This module tests off-by-one errors and boundary conditions around:
+// - Ledger sequence rollover in rate limiting windows
+// - Timestamp-based TTL expiration in caches and sessions
+// - State transitions at exact boundary moments
+//
+// Each test verifies behavior at, before, and after critical boundaries.
+
 #![cfg(test)]
 
-//! Ledger boundary condition tests
-//!
-//! This module tests off-by-one errors and boundary conditions around:
-//! - Ledger sequence rollover in rate limiting windows
-//! - Timestamp-based TTL expiration in caches and sessions
-//! - State transitions at exact boundary moments
-//!
-//! Each test verifies behavior at, before, and after critical boundaries.
+#[path = "sep10_test_util.rs"]
+mod sep10_test_util;
 
 mod ledger_boundary_tests {
     use soroban_sdk::{
@@ -18,10 +21,10 @@ mod ledger_boundary_tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient, AnchorMetadata};
-    use crate::rate_limiter::{RateLimiter, RateLimitConfig};
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient, AnchorMetadata};
+    use anchorkit::{RateLimiter, RateLimitConfig};
+    use anchorkit::{TransactionStateTracker, TransactionState};
     use crate::sep10_test_util::{register_attestor_with_sep10, sign_payload};
-    use crate::transaction_state_tracker::{TransactionStateTracker, TransactionState};
 
     fn make_env() -> Env {
         let env = Env::default();
@@ -529,7 +532,7 @@ mod ledger_boundary_tests {
         let sk = SigningKey::generate(&mut OsRng);
         let pk = soroban_sdk::BytesN::from_array(&env, sk.verifying_key().as_bytes());
         assert!(
-            client.try_register_attestor_with_session(&session_id, &attestor, &pk).is_err(),
+            client.try_register_attestor_with_session(&user, &session_id, &attestor, &pk).is_err(),
             "Session should be expired one second past TTL"
         );
     }
@@ -933,9 +936,10 @@ mod ledger_boundary_tests {
         register_attestor_with_sep10(&env, &client, &attestor, &attestor, &sk);
 
         // Submit KYC at t=100000
-        client.submit_kyc(&attestor, &subject);
+        let data_hash = Bytes::from_slice(&env, b"kyc_data_hash_1234567890abcdefgh");
+        client.submit_kyc(&subject, &data_hash, &attestor);
         // Approve KYC with expiry at t=103600
-        client.approve_kyc(&subject);
+        client.approve_kyc(&admin, &subject);
 
         // Verify KYC is approved
         let status = client.get_kyc_status(&subject);

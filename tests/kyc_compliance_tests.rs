@@ -9,7 +9,7 @@ mod kyc_compliance_tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient, KycStatus};
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient, KycStatus};
     use crate::sep10_test_util::register_attestor_with_sep10;
 
     fn make_env() -> Env {
@@ -31,14 +31,13 @@ mod kyc_compliance_tests {
         });
     }
 
-    fn setup_contract() -> (Env, Address, AnchorKitContractClient) {
-        let env = make_env();
-        set_ledger(&env, 1000);
+    fn setup_contract(env: &Env) -> (Address, AnchorKitContractClient<'_>) {
+        set_ledger(env, 1000);
         let contract_id = env.register_contract(None, AnchorKitContract);
-        let client = AnchorKitContractClient::new(&env, &contract_id);
-        let admin = Address::generate(&env);
+        let client = AnchorKitContractClient::new(env, &contract_id);
+        let admin = Address::generate(env);
         client.initialize(&admin);
-        (env, admin, client)
+        (admin, client)
     }
 
     fn register_attestor(
@@ -57,7 +56,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_state_transition_not_submitted_to_pending() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -77,7 +76,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_state_transition_pending_to_approved() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -100,14 +99,14 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_status_expired_after_approval() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
 
         let data_hash = Bytes::from_slice(&env, b"test_kyc_data_hash_1234567890ab");
         client.submit_kyc(&subject, &data_hash, &attestor);
-        client.approve_kyc(&subject);
+        client.approve_kyc(&admin, &subject);
         assert_eq!(client.get_kyc_status(&subject), KycStatus::Approved);
 
         set_ledger(&env, 1000 + 30 * 24 * 60 * 60 + 1);
@@ -116,14 +115,14 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_can_resubmit_after_expiry() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
 
         let data_hash = Bytes::from_slice(&env, b"test_kyc_data_hash_1234567890ab");
         client.submit_kyc(&subject, &data_hash, &attestor);
-        client.approve_kyc(&subject);
+        client.approve_kyc(&admin, &subject);
         set_ledger(&env, 1000 + 30 * 24 * 60 * 60 + 1);
         assert_eq!(client.get_kyc_status(&subject), KycStatus::Expired);
 
@@ -134,7 +133,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_state_transition_pending_to_rejected() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -158,7 +157,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_cannot_transition_from_approved_to_pending() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -182,7 +181,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_cannot_transition_from_rejected_to_pending() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -207,7 +206,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_cannot_approve_non_pending() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -226,7 +225,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_cannot_reject_non_pending() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -250,7 +249,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_get_kyc_status_not_submitted() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let subject = Address::generate(&env);
 
         // Query status for non-existent KYC record
@@ -260,7 +259,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_get_kyc_status_pending() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -274,7 +273,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_get_kyc_status_approved() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -289,7 +288,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_get_kyc_status_rejected() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -309,7 +308,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_submit_kyc_requires_attestor_auth() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         let unauthorized = Address::generate(&env);
@@ -326,7 +325,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_approve_kyc_requires_admin_auth() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -345,7 +344,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_reject_kyc_requires_admin_auth() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -368,7 +367,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_attestation_rejected_with_non_approved_kyc() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -379,13 +378,13 @@ mod kyc_compliance_tests {
         let signature = Bytes::from_slice(&env, b"signature_1234567890abcdefghijklmn");
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            client.submit_attestation_with_kyc_check(
+            client.submit_attestation_kyc_check(
                 &attestor,
                 &subject,
-                timestamp,
+                &timestamp,
                 &payload_hash,
                 &signature,
-                true,
+                &true,
             );
         }));
         assert!(result.is_err());
@@ -393,7 +392,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_attestation_rejected_with_pending_kyc() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -408,13 +407,13 @@ mod kyc_compliance_tests {
         let signature = Bytes::from_slice(&env, b"signature_1234567890abcdefghijklmn");
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            client.submit_attestation_with_kyc_check(
+            client.submit_attestation_kyc_check(
                 &attestor,
                 &subject,
-                timestamp,
+                &timestamp,
                 &payload_hash,
                 &signature,
-                true,
+                &true,
             );
         }));
         assert!(result.is_err());
@@ -422,7 +421,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_attestation_rejected_with_rejected_kyc() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -439,13 +438,13 @@ mod kyc_compliance_tests {
         let signature = Bytes::from_slice(&env, b"signature_1234567890abcdefghijklmn");
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            client.submit_attestation_with_kyc_check(
+            client.submit_attestation_kyc_check(
                 &attestor,
                 &subject,
-                timestamp,
+                &timestamp,
                 &payload_hash,
                 &signature,
-                true,
+                &true,
             );
         }));
         assert!(result.is_err());
@@ -453,7 +452,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_attestation_succeeds_with_approved_kyc() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -468,13 +467,13 @@ mod kyc_compliance_tests {
         let payload_hash = Bytes::from_slice(&env, b"payload_hash_1234567890abcdefghij");
         let signature = Bytes::from_slice(&env, b"signature_1234567890abcdefghijklmn");
 
-        let attestation_id = client.submit_attestation_with_kyc_check(
+        let attestation_id = client.submit_attestation_kyc_check(
             &attestor,
             &subject,
-            timestamp,
-            &payload_hash,
+            &timestamp,
+                &payload_hash,
             &signature,
-            true,
+            &true,
         );
 
         // Verify attestation was created
@@ -483,7 +482,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_attestation_succeeds_without_kyc_check() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -493,13 +492,13 @@ mod kyc_compliance_tests {
         let payload_hash = Bytes::from_slice(&env, b"payload_hash_1234567890abcdefghij");
         let signature = Bytes::from_slice(&env, b"signature_1234567890abcdefghijklmn");
 
-        let attestation_id = client.submit_attestation_with_kyc_check(
+        let attestation_id = client.submit_attestation_kyc_check(
             &attestor,
             &subject,
-            timestamp,
-            &payload_hash,
+            &timestamp,
+                &payload_hash,
             &signature,
-            false,
+            &false,
         );
 
         // Verify attestation was created
@@ -512,7 +511,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_record_persists_in_storage() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);
@@ -530,7 +529,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_multiple_subjects_kyc_independent() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject1 = Address::generate(&env);
         let subject2 = Address::generate(&env);
@@ -554,7 +553,7 @@ mod kyc_compliance_tests {
 
     #[test]
     fn test_kyc_rejection_reason_stored() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         register_attestor(&env, &client, &admin, &attestor);

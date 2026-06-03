@@ -73,7 +73,7 @@ pub struct FirmQuote {
     /// Optional routing reason or referral code explaining why this quote was
     /// selected (e.g. `"lowest_fee"`, `"referral"`, `"preferred_anchor"`).
     /// `None` when no reason was recorded (#298).
-    pub routing_reason: Option<std::string::String>,
+    pub routing_reason: Option<alloc::string::String>,
 }
 
 // ── Raw response types (from anchor APIs) ────────────────────────────────────
@@ -672,6 +672,7 @@ mod tests {
             buy_amount: "150".to_string(),
             sell_asset: "XLM".to_string(),
             buy_asset: "USDC".to_string(),
+            routing_reason: None,
         };
         assert!(is_quote_expired(&quote, 2000));
     }
@@ -686,6 +687,7 @@ mod tests {
             buy_amount: "150".to_string(),
             sell_asset: "XLM".to_string(),
             buy_asset: "USDC".to_string(),
+            routing_reason: None,
         };
         assert!(!is_quote_expired(&quote, 1000));
     }
@@ -700,6 +702,7 @@ mod tests {
             buy_amount: "150".to_string(),
             sell_asset: "XLM".to_string(),
             buy_asset: "USDC".to_string(),
+            routing_reason: None,
         };
         assert!(is_quote_expired(&quote, 1500));
     }
@@ -758,6 +761,7 @@ mod tests {
             buy_amount: "150".to_string(),
             sell_asset: "XLM".to_string(),
             buy_asset: "USDC".to_string(),
+            routing_reason: None,
         }
     }
 
@@ -770,6 +774,7 @@ mod tests {
             buy_amount: "150".to_string(),
             sell_asset: "XLM".to_string(),
             buy_asset: "USDC".to_string(),
+            routing_reason: None,
         }
     }
 
@@ -921,7 +926,8 @@ mod tests {
         let cheap = make_quote_with_price("cheap", 5000, "0.10");
         let expensive = make_quote_with_price("exp", 5000, "0.90");
         let cmp = QuoteComparator::new(1.0, 0.0);
-        let best = select_best_quote(&[cheap.clone(), expensive], &cmp, 1000).unwrap();
+        let quotes = [cheap.clone(), expensive];
+        let best = select_best_quote(&quotes, &cmp, 1000).unwrap();
         assert_eq!(best.id, "cheap");
     }
 
@@ -930,7 +936,8 @@ mod tests {
         let soon = make_quote("soon", 1100);
         let later = make_quote("later", 5000);
         let cmp = QuoteComparator::new(0.0, 1.0);
-        let best = select_best_quote(&[soon, later.clone()], &cmp, 1000).unwrap();
+        let quotes = [soon, later.clone()];
+        let best = select_best_quote(&quotes, &cmp, 1000).unwrap();
         assert_eq!(best.id, "later");
     }
 
@@ -953,7 +960,8 @@ mod tests {
         let expired = make_quote("expired", 500);
         let live = make_quote("live", 5000);
         let cmp = QuoteComparator::new(0.5, 0.5);
-        let best = select_best_quote(&[expired, live.clone()], &cmp, 1000).unwrap();
+        let quotes = [expired, live.clone()];
+        let best = select_best_quote(&quotes, &cmp, 1000).unwrap();
         assert_eq!(best.id, "live");
     }
 
@@ -963,7 +971,8 @@ mod tests {
         let cheap = make_quote_with_price("cheap", 3000, "0.10");
         let expensive = make_quote_with_price("exp", 3000, "0.90");
         let cmp = QuoteComparator::new(0.5, 0.5);
-        let best = select_best_quote(&[expensive, cheap.clone()], &cmp, 1000).unwrap();
+        let quotes = [expensive, cheap.clone()];
+        let best = select_best_quote(&quotes, &cmp, 1000).unwrap();
         assert_eq!(best.id, "cheap");
     }
 

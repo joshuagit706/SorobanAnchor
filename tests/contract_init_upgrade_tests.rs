@@ -12,10 +12,10 @@
 
 mod contract_init_upgrade_tests {
     use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-    use soroban_sdk::{Address, BytesN, Env};
+    use soroban_sdk::{Address, BytesN, Env, IntoVal};
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient};
-    use crate::errors::ErrorCode;
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient};
+    use anchorkit::errors::ErrorCode;
 
     // -----------------------------------------------------------------------
     // Helpers

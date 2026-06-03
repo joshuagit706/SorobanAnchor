@@ -262,6 +262,7 @@ impl RateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use soroban_sdk::testutils::Ledger as _;
 
     #[test]
     fn test_rate_limit_under_limit() {

@@ -5,13 +5,13 @@ mod sep10_test_util;
 mod admin_permission_tests {
     use soroban_sdk::{
         testutils::{Address as _, Ledger, LedgerInfo},
-        Address, Env,
+        Address, Env, IntoVal,
     };
 
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use crate::contract::{AdminRole, AnchorKitContract, AnchorKitContractClient};
+    use anchorkit::contract::{AdminRole, AnchorKitContract, AnchorKitContractClient};
     use crate::sep10_test_util::register_attestor_with_sep10;
 
     fn make_env() -> Env {
@@ -33,14 +33,13 @@ mod admin_permission_tests {
         });
     }
 
-    fn setup_contract() -> (Env, Address, AnchorKitContractClient) {
-        let env = make_env();
-        setup_ledger(&env);
+    fn setup_contract(env: &Env) -> (Address, AnchorKitContractClient<'_>) {
+        setup_ledger(env);
         let contract_id = env.register_contract(None, AnchorKitContract);
-        let client = AnchorKitContractClient::new(&env, &contract_id);
-        let admin = Address::generate(&env);
+        let client = AnchorKitContractClient::new(env, &contract_id);
+        let admin = Address::generate(env);
         client.initialize(&admin);
-        (env, admin, client)
+        (admin, client)
     }
 
     // -----------------------------------------------------------------------
@@ -50,7 +49,7 @@ mod admin_permission_tests {
     /// The primary admin can approve a pending KYC record.
     #[test]
     fn test_admin_can_approve_kyc() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         let sk = SigningKey::generate(&mut OsRng);
@@ -61,13 +60,13 @@ mod admin_permission_tests {
         client.approve_kyc(&admin, &subject);
 
         let status = client.get_kyc_status(&subject);
-        assert_eq!(status, crate::contract::KycStatus::Approved);
+        assert_eq!(status, anchorkit::contract::KycStatus::Approved);
     }
 
     /// The primary admin can reject a pending KYC record.
     #[test]
     fn test_admin_can_reject_kyc() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
         let sk = SigningKey::generate(&mut OsRng);
@@ -79,7 +78,7 @@ mod admin_permission_tests {
         client.reject_kyc(&admin, &subject, &reason);
 
         let status = client.get_kyc_status(&subject);
-        assert_eq!(status, crate::contract::KycStatus::Rejected);
+        assert_eq!(status, anchorkit::contract::KycStatus::Rejected);
     }
 
     /// A non-admin address without a KycAdmin role is rejected.
@@ -99,7 +98,7 @@ mod admin_permission_tests {
             invoke: &soroban_sdk::testutils::MockAuthInvoke {
                 contract: &contract_id,
                 fn_name: "initialize",
-                args: soroban_sdk::vec![&env, admin.clone().into()],
+                args: soroban_sdk::vec![&env, admin.clone().into_val(&env)],
                 sub_invokes: &[],
             },
         }]);
@@ -116,7 +115,7 @@ mod admin_permission_tests {
     /// `has_role` returns false for an address that was never granted any role.
     #[test]
     fn test_has_role_false_for_ungranted_address() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let stranger = Address::generate(&env);
         assert!(!client.has_role(&stranger, &AdminRole::KycAdmin));
         assert!(!client.has_role(&stranger, &AdminRole::AttestorAdmin));
@@ -126,7 +125,7 @@ mod admin_permission_tests {
     /// After `grant_role`, `has_role` returns true for the grantee.
     #[test]
     fn test_grant_role_makes_has_role_true() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let delegate = Address::generate(&env);
 
         assert!(!client.has_role(&delegate, &AdminRole::KycAdmin));
@@ -137,7 +136,7 @@ mod admin_permission_tests {
     /// Granting one role does not implicitly grant other roles.
     #[test]
     fn test_grant_role_is_role_specific() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let delegate = Address::generate(&env);
 
         client.grant_role(&delegate, &AdminRole::KycAdmin);
@@ -149,7 +148,7 @@ mod admin_permission_tests {
     /// After `revoke_role`, `has_role` returns false again.
     #[test]
     fn test_revoke_role_removes_grant() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let delegate = Address::generate(&env);
 
         client.grant_role(&delegate, &AdminRole::KycAdmin);
@@ -162,7 +161,7 @@ mod admin_permission_tests {
     /// Revoking a role that was never granted is a no-op (does not panic).
     #[test]
     fn test_revoke_role_idempotent() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let delegate = Address::generate(&env);
 
         // Revoke without prior grant — should not panic.
@@ -173,7 +172,7 @@ mod admin_permission_tests {
     /// The primary admin implicitly passes `has_role` for every role.
     #[test]
     fn test_primary_admin_has_all_roles_implicitly() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
 
         assert!(client.has_role(&admin, &AdminRole::KycAdmin));
         assert!(client.has_role(&admin, &AdminRole::AttestorAdmin));
@@ -183,7 +182,7 @@ mod admin_permission_tests {
     /// A KycAdmin role-holder can approve KYC without being the primary admin.
     #[test]
     fn test_kyc_admin_role_allows_approve_kyc() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let delegate = Address::generate(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
@@ -198,13 +197,13 @@ mod admin_permission_tests {
         client.approve_kyc(&delegate, &subject);
 
         let status = client.get_kyc_status(&subject);
-        assert_eq!(status, crate::contract::KycStatus::Approved);
+        assert_eq!(status, anchorkit::contract::KycStatus::Approved);
     }
 
     /// A KycAdmin role-holder can reject KYC.
     #[test]
     fn test_kyc_admin_role_allows_reject_kyc() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let delegate = Address::generate(&env);
         let attestor = Address::generate(&env);
         let subject = Address::generate(&env);
@@ -220,13 +219,13 @@ mod admin_permission_tests {
         client.reject_kyc(&delegate, &subject, &reason);
 
         let status = client.get_kyc_status(&subject);
-        assert_eq!(status, crate::contract::KycStatus::Rejected);
+        assert_eq!(status, anchorkit::contract::KycStatus::Rejected);
     }
 
     /// An AttestorAdmin role-holder can register attestors in a session.
     #[test]
     fn test_attestor_admin_role_allows_register_with_session() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let delegate = Address::generate(&env);
         let user = Address::generate(&env);
         let new_attestor = Address::generate(&env);
@@ -244,7 +243,7 @@ mod admin_permission_tests {
     /// An AttestorAdmin role-holder can revoke attestors in a session.
     #[test]
     fn test_attestor_admin_role_allows_revoke_with_session() {
-        let (env, admin, client) = setup_contract();
+        let env = make_env(); let (admin, client) = setup_contract(&env);
         let delegate = Address::generate(&env);
         let user = Address::generate(&env);
         let existing_attestor = Address::generate(&env);
@@ -266,7 +265,7 @@ mod admin_permission_tests {
     /// Multiple addresses can hold the same role independently.
     #[test]
     fn test_multiple_addresses_can_hold_same_role() {
-        let (env, _admin, client) = setup_contract();
+        let env = make_env(); let (_admin, client) = setup_contract(&env);
         let delegate_a = Address::generate(&env);
         let delegate_b = Address::generate(&env);
 

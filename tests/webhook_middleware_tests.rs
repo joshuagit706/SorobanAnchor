@@ -7,13 +7,15 @@ mod webhook_middleware_tests {
     use anchorkit::{
         errors::ErrorCode,
         retry::RetryConfig,
-        webhook::{deliver_webhook, get_dead_letter_webhooks, WebhookDeliveryConfig},
+        webhook::{deliver_webhook, get_dead_letter_webhooks, DlqEntry, WebhookDeliveryConfig},
     };
 
     fn config(max_retries: u32) -> WebhookDeliveryConfig {
         WebhookDeliveryConfig {
             endpoint_url: "https://example.com/hook".into(),
             max_retries,
+            retry_delay_ms: 0,
+            timeout_ms: 1000,
             retry_config: RetryConfig::new(max_retries, 0, 0, 1),
             dead_letter_storage_key: "test_dlq".into(),
         }
@@ -27,7 +29,7 @@ mod webhook_middleware_tests {
         let call_count = Arc::new(Mutex::new(0u32));
         let cc = call_count.clone();
 
-        let mut dlq: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut dlq: BTreeMap<String, Vec<DlqEntry>> = BTreeMap::new();
         let result = deliver_webhook(
             &config(3),
             r#"{"event":"deposit"}"#,
@@ -37,6 +39,7 @@ mod webhook_middleware_tests {
                 Ok(200)
             },
             |_| {},
+            || 1_000_000u64,
         );
 
         assert!(result.is_ok());
@@ -52,7 +55,7 @@ mod webhook_middleware_tests {
         let call_count = Arc::new(Mutex::new(0u32));
         let cc = call_count.clone();
 
-        let mut dlq: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut dlq: BTreeMap<String, Vec<DlqEntry>> = BTreeMap::new();
         let result = deliver_webhook(
             &config(3),
             r#"{"event":"withdrawal"}"#,
@@ -63,6 +66,7 @@ mod webhook_middleware_tests {
                 if *n < 3 { Ok(503) } else { Ok(200) }
             },
             |_| {},
+            || 1_000_000u64,
         );
 
         assert!(result.is_ok(), "expected success on 3rd attempt, got {:?}", result);
@@ -76,7 +80,7 @@ mod webhook_middleware_tests {
     #[test]
     fn test_exhausted_retries_writes_to_dlq() {
         let payload = r#"{"event":"kyc_failed"}"#;
-        let mut dlq: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut dlq: BTreeMap<String, Vec<DlqEntry>> = BTreeMap::new();
 
         let result = deliver_webhook(
             &config(3),
@@ -84,6 +88,7 @@ mod webhook_middleware_tests {
             &mut dlq,
             |_url, _body| Ok(503u16),
             |_| {},
+            || 1_000_000u64,
         );
 
         assert!(result.is_err());
@@ -96,7 +101,9 @@ mod webhook_middleware_tests {
         // Payload must be in the DLQ
         let entries = get_dead_letter_webhooks(&dlq, "test_dlq");
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0], payload);
+        assert_eq!(entries[0].payload, payload);
+        assert_eq!(entries[0].attempts_made, 3);
+        assert_eq!(entries[0].last_status_code, 503);
     }
 
     // -----------------------------------------------------------------------
@@ -104,7 +111,7 @@ mod webhook_middleware_tests {
     // -----------------------------------------------------------------------
     #[test]
     fn test_admin_can_inspect_dlq() {
-        let mut dlq: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut dlq: BTreeMap<String, Vec<DlqEntry>> = BTreeMap::new();
         let payloads = [r#"{"event":"a"}"#, r#"{"event":"b"}"#];
 
         for p in &payloads {
@@ -114,13 +121,14 @@ mod webhook_middleware_tests {
                 &mut dlq,
                 |_url, _body| Ok(500u16),
                 |_| {},
+                || 1_000_000u64,
             );
         }
 
         let entries = get_dead_letter_webhooks(&dlq, "test_dlq");
         assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0], payloads[0]);
-        assert_eq!(entries[1], payloads[1]);
+        assert_eq!(entries[0].payload, payloads[0]);
+        assert_eq!(entries[1].payload, payloads[1]);
 
         // Unknown key returns empty slice
         assert!(get_dead_letter_webhooks(&dlq, "no_such_key").is_empty());

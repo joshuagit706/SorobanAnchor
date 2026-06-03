@@ -8,7 +8,7 @@ mod sep10_contract_tests {
     use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
     use soroban_sdk::{Address, Bytes, Env, String};
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient};
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient};
     use crate::sep10_test_util::{build_sep10_jwt, build_sep10_jwt_with_iat, register_attestor_with_sep10};
 
     fn make_env() -> Env {

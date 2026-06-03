@@ -59,6 +59,7 @@ fn main() {
         },
         |_err| false,
         |_ms| {},
+        &mut anchorkit::MockJitterSource::new(vec![0]),
     );
     println!("  ✅ Result: {:?} after {} attempt(s)", result, attempts);
 

@@ -16,7 +16,7 @@ mod schema_versioning_tests {
         Address, Bytes, BytesN, Env,
     };
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient, Attestation, SCHEMA_V1};
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient, Attestation, SCHEMA_V1};
 
     fn make_env() -> Env {
         let env = Env::default();
@@ -113,9 +113,9 @@ mod schema_versioning_tests {
         set_ledger(&env, 1_000);
         let (client, _) = setup(&env);
 
-        client.migrate();
-        // Second call must also succeed without panicking.
-        client.migrate();
+        client.migrate(&1u32);
+        // Second call with advancing version must also succeed without panicking.
+        client.migrate(&2u32);
     }
 
     // -----------------------------------------------------------------------

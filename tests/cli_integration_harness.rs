@@ -286,7 +286,7 @@ fn harness_step5_session_workflow() {
 
     // Register attestor within the session.
     let pk: BytesN<32> = BytesN::from_array(&env, key.verifying_key().as_bytes());
-    client.register_attestor_with_session(&session_id, &attestor, &pk);
+    client.register_attestor_with_session(&user, &session_id, &attestor, &pk);
     assert!(client.is_attestor(&attestor));
     assert_eq!(client.get_session_operation_count(&session_id), 1);
 
@@ -500,7 +500,7 @@ fn harness_step9_kyc_workflow() {
     env.mock_all_auths();
     setup_ledger(&env, 1_000_000);
 
-    let (client, _admin) = deploy_and_initialize(&env);
+    let (client, admin) = deploy_and_initialize(&env);
     let attestor = Address::generate(&env);
     let subject = Address::generate(&env);
     let key = SigningKey::generate(&mut OsRng);
@@ -518,7 +518,7 @@ fn harness_step9_kyc_workflow() {
     assert_eq!(client.get_kyc_status(&subject), KycStatus::Pending);
 
     // Admin approves.
-    client.approve_kyc(&subject);
+    client.approve_kyc(&admin, &subject);
     assert_eq!(client.get_kyc_status(&subject), KycStatus::Approved);
 }
 

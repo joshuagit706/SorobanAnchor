@@ -396,7 +396,7 @@ mod cross_platform_hash_tests {
         let data = Bytes::from_slice(&env, VECTOR_1.data_payload);
 
         let hash = compute_payload_hash(&env, &subject, VECTOR_1.timestamp, &data);
-        let hash_hex = bytes_to_hex(&hash.to_vec());
+        let hash_hex = bytes_to_hex(&hash.to_array());
 
         // Verify the hash matches the expected value
         assert_eq!(
@@ -414,7 +414,7 @@ mod cross_platform_hash_tests {
         let data = Bytes::from_slice(&env, VECTOR_2.data_payload);
 
         let hash = compute_payload_hash(&env, &subject, VECTOR_2.timestamp, &data);
-        let hash_hex = bytes_to_hex(&hash.to_vec());
+        let hash_hex = bytes_to_hex(&hash.to_array());
 
         assert_eq!(
             hash_hex, VECTOR_2.expected_hash,
@@ -431,7 +431,7 @@ mod cross_platform_hash_tests {
         let data = Bytes::from_slice(&env, VECTOR_3.data_payload);
 
         let hash = compute_payload_hash(&env, &subject, VECTOR_3.timestamp, &data);
-        let hash_hex = bytes_to_hex(&hash.to_vec());
+        let hash_hex = bytes_to_hex(&hash.to_array());
 
         assert_eq!(
             hash_hex, VECTOR_3.expected_hash,
@@ -448,7 +448,7 @@ mod cross_platform_hash_tests {
         let data = Bytes::from_slice(&env, VECTOR_4.data_payload);
 
         let hash = compute_payload_hash(&env, &subject, VECTOR_4.timestamp, &data);
-        let hash_hex = bytes_to_hex(&hash.to_vec());
+        let hash_hex = bytes_to_hex(&hash.to_array());
 
         assert_eq!(
             hash_hex, VECTOR_4.expected_hash,
@@ -465,7 +465,7 @@ mod cross_platform_hash_tests {
         let data = Bytes::from_slice(&env, VECTOR_5.data_payload);
 
         let hash = compute_payload_hash(&env, &subject, VECTOR_5.timestamp, &data);
-        let hash_hex = bytes_to_hex(&hash.to_vec());
+        let hash_hex = bytes_to_hex(&hash.to_array());
 
         assert_eq!(
             hash_hex, VECTOR_5.expected_hash,

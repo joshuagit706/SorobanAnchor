@@ -5,7 +5,7 @@
 /// - `submit_quote` (no-reason path) stores `routing_reason: None`.
 /// - `get_quote_routing_reason` returns the stored reason or `None`.
 /// - Transaction records store and preserve `routing_reason` through state transitions.
-/// - `create_transaction_record_with_reason` sets the reason; plain
+/// - `create_txn_record_with_reason` sets the reason; plain
 ///   `create_transaction_record` leaves it `None`.
 /// - SEP-38 `FirmQuote` carries an optional routing reason.
 /// - Tracker-level `create_transaction_with_reason` persists the reason and
@@ -242,15 +242,15 @@ mod routing_reason_contract_tests {
         assert_eq!(record.routing_reason, None);
     }
 
-    /// `create_transaction_record_with_reason` stores the reason in the record.
+    /// `create_txn_record_with_reason` stores the reason in the record.
     #[test]
-    fn test_create_transaction_record_with_reason_stores_reason() {
+    fn test_create_txn_record_with_reason_stores_reason() {
         let env = make_env();
         set_ledger(&env, 1_000_000);
         let (client, _) = setup(&env);
         let initiator = Address::generate(&env);
 
-        let record = client.create_transaction_record_with_reason(
+        let record = client.create_txn_record_with_reason(
             &1u64,
             &initiator,
             &Some(String::from_str(&env, "referral")),
@@ -270,7 +270,7 @@ mod routing_reason_contract_tests {
         let (client, _) = setup(&env);
         let initiator = Address::generate(&env);
 
-        client.create_transaction_record_with_reason(
+        client.create_txn_record_with_reason(
             &1u64,
             &initiator,
             &Some(String::from_str(&env, "lowest_fee")),
@@ -299,7 +299,7 @@ mod routing_reason_contract_tests {
         let (client, _) = setup(&env);
         let initiator = Address::generate(&env);
 
-        client.create_transaction_record_with_reason(
+        client.create_txn_record_with_reason(
             &1u64,
             &initiator,
             &Some(String::from_str(&env, "referral")),

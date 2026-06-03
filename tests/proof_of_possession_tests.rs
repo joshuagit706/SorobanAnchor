@@ -61,7 +61,7 @@ mod proof_of_possession_tests {
     fn register_attestor(client: &AnchorKitContractClient, env: &Env, anchor: &Address) {
         // Use the session-based registration which doesn't require a live SEP-10 token.
         // We create a session first, then register within it.
-        let session_id = client.create_session(anchor, &3600u64);
+        let session_id = client.create_session(anchor);
         let pk = BytesN::from_array(env, &[0xABu8; 32]);
         client.register_attestor_with_session(anchor, &session_id, anchor, &pk);
     }

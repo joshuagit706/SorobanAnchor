@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 
 fn cmd() -> Command {

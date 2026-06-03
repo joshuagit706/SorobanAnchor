@@ -5,7 +5,7 @@
 //! 2. `get_anchor_metadata_history` returns entries in ascending version order.
 //! 3. `get_anchor_metadata_at_version` retrieves a specific historical snapshot.
 //! 4. History preserves all field values at the time of each write.
-//! 5. `get_anchor_metadata_version_count` returns 0 before any writes.
+//! 5. `get_anchor_meta_version_count` returns 0 before any writes.
 //! 6. Rollback semantics: a specific historical version can be re-applied.
 //! 7. History cap: at most 50 entries are returned by `get_anchor_metadata_history`.
 
@@ -61,7 +61,7 @@ mod metadata_version_history_tests {
         let (client, _admin) = deploy(&env);
         let anchor = Address::generate(&env);
 
-        assert_eq!(client.get_anchor_metadata_version_count(&anchor), 0);
+        assert_eq!(client.get_anchor_meta_version_count(&anchor), 0);
     }
 
     #[test]
@@ -72,13 +72,13 @@ mod metadata_version_history_tests {
         let anchor = Address::generate(&env);
 
         client.set_anchor_metadata(&anchor, &9000, &300, &8500, &9900, &1_000_000);
-        assert_eq!(client.get_anchor_metadata_version_count(&anchor), 1);
+        assert_eq!(client.get_anchor_meta_version_count(&anchor), 1);
 
         client.set_anchor_metadata(&anchor, &9100, &280, &8600, &9950, &2_000_000);
-        assert_eq!(client.get_anchor_metadata_version_count(&anchor), 2);
+        assert_eq!(client.get_anchor_meta_version_count(&anchor), 2);
 
         client.set_anchor_metadata(&anchor, &9200, &260, &8700, &9980, &3_000_000);
-        assert_eq!(client.get_anchor_metadata_version_count(&anchor), 3);
+        assert_eq!(client.get_anchor_meta_version_count(&anchor), 3);
     }
 
     // -----------------------------------------------------------------------
@@ -230,7 +230,7 @@ mod metadata_version_history_tests {
         assert_eq!(current.total_volume, 1_000_000);
 
         // Version count should now be 3 (v1, v2, rollback-as-v3)
-        assert_eq!(client.get_anchor_metadata_version_count(&anchor), 3);
+        assert_eq!(client.get_anchor_meta_version_count(&anchor), 3);
     }
 
     // -----------------------------------------------------------------------
@@ -290,8 +290,8 @@ mod metadata_version_history_tests {
         client.set_anchor_metadata(&anchor_a, &9100, &290, &8600, &9950, &1_100_000);
         client.set_anchor_metadata(&anchor_b, &5000, &600, &4000, &7000, &500_000);
 
-        assert_eq!(client.get_anchor_metadata_version_count(&anchor_a), 2);
-        assert_eq!(client.get_anchor_metadata_version_count(&anchor_b), 1);
+        assert_eq!(client.get_anchor_meta_version_count(&anchor_a), 2);
+        assert_eq!(client.get_anchor_meta_version_count(&anchor_b), 1);
 
         let history_a = client.get_anchor_metadata_history(&anchor_a);
         let history_b = client.get_anchor_metadata_history(&anchor_b);

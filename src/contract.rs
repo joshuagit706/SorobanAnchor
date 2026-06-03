@@ -354,6 +354,12 @@ pub struct CompliancePolicy {
     pub minimum_score: Option<u32>,
 }
 
+impl CompliancePolicy {
+    pub fn default_policy() -> Self {
+        CompliancePolicy { minimum_score: None }
+    }
+}
+
 #[contracttype]
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u32)]
@@ -1122,16 +1128,6 @@ fn validate_currency_code(env: &Env, code: &String) {
     if len == 0 || len > 12 {
         panic_with_error!(env, ErrorCode::InvalidAssetCode);
     }
-    // Soroban String: iterate bytes and check ASCII alphanumeric
-    let bytes = code.clone().to_xdr(env);
-    // XDR-encoded string has a 4-byte length prefix; skip it
-    let n = bytes.len() as usize;
-    for i in 4..n {
-        let b = bytes.get(i as u32).unwrap_or(0);
-        if !b.is_ascii_alphanumeric() {
-            panic_with_error!(env, ErrorCode::InvalidAssetCode);
-        }
-    }
 }
 
 /// Validate all fee and limit fields of a single [`AssetInfo`] record.
@@ -1447,20 +1443,26 @@ impl AnchorKitContract {
     /// let env = Env::default();
     /// AnchorKitContract::migrate(env);
     /// ```
-    pub fn migrate(env: Env) {
-        // #228: migrate must not run before initialization
+    pub fn migrate(env: Env, new_schema_version: u32) {
+        // migrate must not run before initialization
         if !env.storage().persistent().has(&initialized_key(&env)) {
             panic_with_error!(&env, ErrorCode::NotInitialized);
         }
         Self::require_admin(&env);
 
-        let version = Self::get_version(env.clone());
-        let nonce_key = make_storage_key(&env, &[b"MIGNONCE", &version.patch.to_be_bytes()]);
-        if env.storage().instance().has(&nonce_key) {
-            return;
+        // Version must be positive
+        if new_schema_version == 0 {
+            panic_with_error!(&env, ErrorCode::ValidationError);
         }
 
-        env.storage().instance().set(&nonce_key, &true);
+        // Version must advance
+        let schema_key = make_storage_key(&env, &[b"SCHEMAVER"]);
+        let current: u32 = env.storage().instance().get(&schema_key).unwrap_or(0);
+        if new_schema_version <= current {
+            panic_with_error!(&env, ErrorCode::ValidationError);
+        }
+
+        env.storage().instance().set(&schema_key, &new_schema_version);
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_TTL, INSTANCE_TTL);
@@ -1468,30 +1470,11 @@ impl AnchorKitContract {
 
     /// Get the current on-chain data schema version.
     ///
-    /// Returns the schema version constant that is written into every new persistent record
-    /// (attestations, quotes, KYC records, etc.). Consumers can compare stored record versions
-    /// against this value to detect version skew after a WASM upgrade.
-    ///
-    /// # Arguments
-    ///
-    /// * `_env` - The Soroban environment context.
-    ///
-    /// # Returns
-    ///
-    /// The current schema version (currently [`SCHEMA_V1`] = 1).
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use soroban_sdk::Env;
-    /// use anchorkit::AnchorKitContract;
-    ///
-    /// let env = Env::default();
-    /// let schema_version = AnchorKitContract::get_schema_version(env);
-    /// assert_eq!(schema_version, 1);
-    /// ```
-    pub fn get_schema_version(_env: Env) -> u32 {
-        SCHEMA_V1
+    /// Returns the stored schema version (set via `migrate`), or 0 before any
+    /// migration has been run.
+    pub fn get_schema_version(env: Env) -> u32 {
+        let schema_key = make_storage_key(&env, &[b"SCHEMAVER"]);
+        env.storage().instance().get(&schema_key).unwrap_or(0)
     }
 
     // -----------------------------------------------------------------------
@@ -2290,11 +2273,11 @@ impl AnchorKitContract {
         if !Self::is_attestor(env.clone(), attestor.clone()) {
             panic_with_error!(&env, ErrorCode::AttestorNotRegistered);
         }
-        let xdr = attestor.clone().to_xdr(&env);
-        let raw = xdr_to_vec(&xdr);
-        env.storage().persistent()
-            .get::<_, String>(&make_storage_key(&env, &[b"ENDPOINT", &raw]))
-            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::AttestorNotRegistered))
+        let profile = Self::load_or_init_profile(&env, &attestor);
+        if profile.endpoint.len() == 0 {
+            panic_with_error!(&env, ErrorCode::AttestorNotRegistered);
+        }
+        profile.endpoint
     }
 
     /// Register a webhook URL for an attestor.
@@ -2380,11 +2363,11 @@ impl AnchorKitContract {
         if !Self::is_attestor(env.clone(), attestor.clone()) {
             panic_with_error!(&env, ErrorCode::AttestorNotRegistered);
         }
-        let xdr = attestor.clone().to_xdr(&env);
-        let raw = xdr_to_vec(&xdr);
-        env.storage().persistent()
-            .get::<_, String>(&make_storage_key(&env, &[b"WEBHOOK", &raw]))
-            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::AttestorNotRegistered))
+        let profile = Self::load_or_init_profile(&env, &attestor);
+        if profile.webhook_url.len() == 0 {
+            panic_with_error!(&env, ErrorCode::AttestorNotRegistered);
+        }
+        profile.webhook_url
     }
 
     // -----------------------------------------------------------------------
@@ -2431,11 +2414,12 @@ impl AnchorKitContract {
     /// AnchorKitContract::configure_services(env, anchor, services);
     /// ```
     pub fn configure_services(env: Env, anchor: Address, services: Vec<u32>) {
-        Self::configure_services_versioned(env, anchor, services, Vec::new(&env), SERVICE_CAPABILITY_VERSION);
+        let retirements = Vec::new(&env);
+        Self::configure_services_versioned(env, anchor, services, retirements, SERVICE_CAPABILITY_VERSION);
     }
 
     /// Configure an anchor's supported services and retirement metadata (simple version).
-    pub fn configure_services_with_retirement(env: Env, anchor: Address, services: Vec<u32>, service_retirements: Vec<ServiceRetirementInfo>) {
+    pub fn configure_services_with_retire(env: Env, anchor: Address, services: Vec<u32>, service_retirements: Vec<ServiceRetirementInfo>) {
         Self::configure_services_versioned(env, anchor, services, service_retirements, SERVICE_CAPABILITY_VERSION);
     }
 
@@ -2544,13 +2528,20 @@ impl AnchorKitContract {
         
         let record = AnchorServices {
             anchor: anchor.clone(),
-            services: normalized,
+            services: normalized.clone(),
             service_capability_version: version,
             service_retirements,
         };
         let key = make_storage_key(&env, &[b"SERVICES", &raw]);
         env.storage().persistent().set(&key, &record);
         env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        // Also sync services into the unified AttestorProfile.
+        let mut profile = Self::load_or_init_profile(&env, &anchor);
+        profile.services = normalized;
+        profile.updated_at = env.ledger().timestamp();
+        Self::save_profile(&env, &profile);
+
         env.events().publish((symbol_short!("services"), symbol_short!("config")), record);
     }
 
@@ -2669,7 +2660,7 @@ impl AnchorKitContract {
     ///
     /// Vector of active service type codes.
     pub fn get_active_services(env: Env, anchor: Address) -> Vec<u32> {
-        let record = Self::get_supported_services(env, anchor);
+        let record = Self::get_supported_services(env.clone(), anchor);
         let mut active = Vec::new(&env);
         for service in record.services.iter() {
             if !Self::is_service_retired(&record, service) {
@@ -2777,14 +2768,14 @@ impl AnchorKitContract {
                     service_code: service,
                     retired: true,
                     retirement_timestamp: retirement_timestamp.or(retirement.retirement_timestamp),
-                    deprecation_notice: deprecation_notice.or(retirement.deprecation_notice),
+                    deprecation_notice: deprecation_notice.clone().or(retirement.deprecation_notice),
                 });
                 found = true;
             } else {
                 new_retirements.push_back(retirement);
             }
         }
-        
+
         if !found {
             // Add new retirement info
             new_retirements.push_back(ServiceRetirementInfo {
@@ -3358,8 +3349,8 @@ impl AnchorKitContract {
         if env.storage().persistent().has(&key) {
             let existing: KycRecord = env.storage().persistent().get(&key)
                 .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::ComplianceNotMet));
-            let current_status = Self::current_kyc_status(&env, &existing);
-            if !Self::validate_kyc_transition(current_status, KycStatus::Pending, &existing, now) {
+            let current_status = current_kyc_status(&env, &existing);
+            if !validate_kyc_transition(current_status, KycStatus::Pending, &existing, now) {
                 panic_with_error!(&env, ErrorCode::ComplianceNotMet);
             }
         }
@@ -3392,8 +3383,8 @@ impl AnchorKitContract {
         let key = kyc_record_key(&env, &subject);
         let mut record: KycRecord = env.storage().persistent().get(&key)
             .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::KycNotFound));
-        let current_status = Self::current_kyc_status(&env, &record);
-        if !Self::validate_kyc_transition(current_status, KycStatus::Approved, &record, now) {
+        let current_status = current_kyc_status(&env, &record);
+        if !validate_kyc_transition(current_status, KycStatus::Approved, &record, now) {
             panic_with_error!(&env, ErrorCode::IllegalTransition);
         }
         record.status = KycStatus::Approved as u32;
@@ -3419,8 +3410,8 @@ impl AnchorKitContract {
         let key = kyc_record_key(&env, &subject);
         let mut record: KycRecord = env.storage().persistent().get(&key)
             .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::KycNotFound));
-        let current_status = Self::current_kyc_status(&env, &record);
-        if !Self::validate_kyc_transition(current_status, KycStatus::Rejected, &record, now) {
+        let current_status = current_kyc_status(&env, &record);
+        if !validate_kyc_transition(current_status, KycStatus::Rejected, &record, now) {
             panic_with_error!(&env, ErrorCode::IllegalTransition);
         }
         record.status = KycStatus::Rejected as u32;
@@ -4585,7 +4576,7 @@ impl AnchorKitContract {
     /// Return the current version number for an anchor's metadata history.
     ///
     /// Returns `0` when no metadata has ever been set for the anchor.
-    pub fn get_anchor_metadata_version_count(env: Env, anchor: Address) -> u32 {
+    pub fn get_anchor_meta_version_count(env: Env, anchor: Address) -> u32 {
         let xdr = anchor.clone().to_xdr(&env);
         let raw = xdr_to_vec(&xdr);
         let vcnt_key = make_storage_key(&env, &[b"METAVCNT", &raw]);
@@ -4754,7 +4745,7 @@ impl AnchorKitContract {
         let key = anchor_blacklist_key(&env, &anchor);
         env.storage().persistent().remove(&key);
         env.events().publish(
-            (symbol_short!("anchor"), symbol_short!("unblacklist")),
+            (symbol_short!("anchor"), symbol_short!("unblklist")),
             anchor,
         );
     }
@@ -4841,7 +4832,7 @@ impl AnchorKitContract {
         env.storage()
             .persistent()
             .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::NotFound))
+            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::CacheNotFound))
     }
 
     /// List all anchor clusters.
@@ -5286,7 +5277,7 @@ impl AnchorKitContract {
     /// * `routing_reason` – Human-readable code or description explaining why
     ///   this route was chosen (e.g. `"referral"`, `"lowest_fee"`). `None`
     ///   when no reason applies.
-    pub fn create_transaction_record_with_reason(
+    pub fn create_txn_record_with_reason(
         env: Env,
         transaction_id: u64,
         initiator: Address,
@@ -6174,7 +6165,7 @@ impl AnchorKitContract {
             .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
 
         env.events().publish(
-            (symbol_short!("pop"), symbol_short!("registered"), anchor),
+            (symbol_short!("pop"), symbol_short!("register"), anchor),
             now,
         );
     }

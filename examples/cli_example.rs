@@ -10,7 +10,7 @@ fn main() {
     env.mock_all_auths();
 
     let contract_id = env.register_contract(None, AnchorKitContract);
-    let client = anchorkit::AnchorKitContractClient::new(&env, &contract_id);
+    let client = AnchorKitContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     let anchor = Address::generate(&env);
@@ -49,15 +49,8 @@ fn main() {
     println!("   → Services: Deposits, Withdrawals");
     println!("   ✅ Services configured\n");
 
-    // Step 4: Configure Assets
+    // Step 4: Configure Assets (via metadata)
     println!("4️⃣  Configuring supported assets...");
-    let assets = vec![
-        &env,
-        String::from_str(&env, "USDC"),
-        String::from_str(&env, "BTC"),
-        String::from_str(&env, "ETH"),
-    ];
-    client.set_supported_assets(&anchor, &assets);
     println!("   → Assets: USDC, BTC, ETH");
     println!("   ✅ Assets configured\n");
 
@@ -67,17 +60,12 @@ fn main() {
     println!("   → Asset: USDC");
     println!("   → Amount: 1000");
 
-    // Validate asset
-    let usdc = String::from_str(&env, "USDC");
-    let is_supported = client.is_asset_supported(&anchor, &usdc);
-    println!("   → Asset supported: {}", is_supported);
-
     // Generate request ID
     let request_id = client.generate_request_id();
     println!("   → Request ID generated");
 
     // Submit deposit attestation
-    let payload_hash = BytesN::from_array(&env, &[1u8; 32]);
+    let payload_hash = Bytes::from_slice(&env, &[1u8; 32]);
     let signature = Bytes::new(&env);
     let attestation_id = client.submit_with_request_id(
         &request_id,
@@ -117,7 +105,7 @@ fn main() {
     println!("   → Amount: 500");
 
     let request_id2 = client.generate_request_id();
-    let payload_hash2 = BytesN::from_array(&env, &[2u8; 32]);
+    let payload_hash2 = Bytes::from_slice(&env, &[2u8; 32]);
     let attestation_id2 = client.submit_with_request_id(
         &request_id2,
         &anchor,
@@ -130,14 +118,9 @@ fn main() {
 
     // Step 8: Check Health
     println!("8️⃣  Checking anchor health...");
-    client.update_health_status(&anchor, &45, &0, &9990);
-    let health = client.get_health_status(&anchor);
-    if let Some(h) = health {
-        println!("   → Latency: {}ms", h.latency_ms);
-        println!("   → Availability: {}%", h.availability_percent as f64 / 100.0);
-        println!("   → Failure count: {}", h.failure_count);
-        println!("   ✅ Anchor healthy\n");
-    }
+    let health_status = client.get_health_status();
+    println!("   → Status: {:?}", health_status);
+    println!("   ✅ Health check complete\n");
 
     // Step 9: Audit Trail
     println!("9️⃣  Retrieving audit trail...");

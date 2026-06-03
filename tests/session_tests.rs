@@ -11,7 +11,7 @@ mod session_tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use crate::contract::{AnchorKitContract, AnchorKitContractClient};
+    use anchorkit::contract::{AnchorKitContract, AnchorKitContractClient};
     use crate::sep10_test_util::{register_attestor_with_sep10, sign_payload};
 
     fn make_env() -> Env {
@@ -37,6 +37,18 @@ mod session_tests {
         let mut b = Bytes::new(env);
         for _ in 0..32 {
             b.push_back(byte);
+        }
+        b
+    }
+
+    fn sig(env: &Env, bytes: &[u8]) -> Bytes {
+        let mut b = Bytes::new(env);
+        for byte in bytes {
+            b.push_back(*byte);
+        }
+        // Pad to 64 bytes (Ed25519 signature length)
+        while b.len() < 64 {
+            b.push_back(0);
         }
         b
     }

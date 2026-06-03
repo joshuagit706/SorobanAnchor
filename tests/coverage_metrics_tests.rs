@@ -12,8 +12,8 @@ mod coverage_tests {
     /// Test that contract initialization is covered
     #[test]
     fn test_contract_init_coverage() {
-        let env = Env::new();
-        let admin = Address::random(&env);
+        let env = Env::default();
+        let admin = Address::generate(&env);
         
         // Verify admin can be created and used
         assert!(!admin.to_string().is_empty());
@@ -57,7 +57,7 @@ mod coverage_tests {
         use anchorkit::rate_limiter::RateLimiter;
         
         // Verify types exist
-        let _error_code = ErrorCode::InvalidAddress;
+        let _error_code = ErrorCode::ValidationError;
         let _rate_limiter_type = std::any::type_name::<RateLimiter>();
         
         assert!(!_rate_limiter_type.is_empty());

@@ -271,7 +271,7 @@ mod service_management_tests {
         );
         let snapshot = ServiceManager::get_snapshot(&env, snapshot_id).unwrap();
 
-        assert_eq!(snapshot.description, soroban_sdk::String::from_small_str(&env, "before_maintenance"));
+        assert_eq!(snapshot.description, soroban_sdk::String::from_str(&env, "before_maintenance"));
     }
 
     /// Test that snapshot count is tracked

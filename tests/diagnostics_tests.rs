@@ -2,7 +2,7 @@
 
 mod diagnostics_tests {
     use soroban_sdk::{
-        testutils::{Address as _, LedgerInfo},
+        testutils::{Address as _, Ledger as _, LedgerInfo},
         Address, Env,
     };
 

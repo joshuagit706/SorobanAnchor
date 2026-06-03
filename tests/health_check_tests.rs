@@ -9,26 +9,23 @@ use soroban_sdk::{
 };
 use anchorkit::contract::{
     AnchorKitContract, AnchorKitContractClient, AnchorMetadata, HealthStatus,
-    MetadataCacheState, RateLimitConfig,
+    MetadataCacheState,
 };
-use anchorkit::RateLimiter;
+use anchorkit::{RateLimiter, RateLimitConfig};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn setup_env() -> (Env, AnchorKitContractClient<'static>) {
-    let env = Env::default();
+fn setup_env(env: &Env) -> AnchorKitContractClient<'_> {
     env.mock_all_auths();
     let contract_id = env.register_contract(None, AnchorKitContract);
-    let client = AnchorKitContractClient::new(&env, &contract_id);
-    (env, client)
+    AnchorKitContractClient::new(env, &contract_id)
 }
 
 fn init_contract(env: &Env, client: &AnchorKitContractClient) -> Address {
     let admin = Address::generate(env);
-    let public_key = soroban_sdk::BytesN::from_array(env, &[0u8; 32]);
-    client.initialize(&admin, &public_key);
+    client.initialize(&admin);
     admin
 }
 
@@ -50,13 +47,13 @@ fn make_metadata(env: &Env, anchor: &Address) -> AnchorMetadata {
 
 #[test]
 fn test_health_status_unavailable_before_init() {
-    let (_env, client) = setup_env();
+    let _env = Env::default(); let client = setup_env(&_env);
     assert_eq!(client.get_health_status(), HealthStatus::Unavailable);
 }
 
 #[test]
 fn test_health_status_degraded_after_init_no_rl_config() {
-    let (env, client) = setup_env();
+    let env = Env::default(); let client = setup_env(&env);
     init_contract(&env, &client);
     // No explicit rate-limit config stored → Degraded (using fallback defaults)
     assert_eq!(client.get_health_status(), HealthStatus::Degraded);
@@ -64,7 +61,7 @@ fn test_health_status_degraded_after_init_no_rl_config() {
 
 #[test]
 fn test_health_status_healthy_after_init_with_rl_config() {
-    let (env, client) = setup_env();
+    let env = Env::default(); let client = setup_env(&env);
     init_contract(&env, &client);
     // set_rate_limit_config(max_submissions, window_length)
     client.set_rate_limit_config(&10u32, &100u32);
@@ -77,7 +74,7 @@ fn test_health_status_healthy_after_init_with_rl_config() {
 
 #[test]
 fn test_metadata_freshness_missing() {
-    let (env, client) = setup_env();
+    let env = Env::default(); let client = setup_env(&env);
     init_contract(&env, &client);
     let anchor = Address::generate(&env);
     let report = client.get_metadata_freshness(&anchor);
@@ -88,7 +85,7 @@ fn test_metadata_freshness_missing() {
 
 #[test]
 fn test_metadata_freshness_fresh() {
-    let (env, client) = setup_env();
+    let env = Env::default(); let client = setup_env(&env);
     init_contract(&env, &client);
     let anchor = Address::generate(&env);
     let metadata = make_metadata(&env, &anchor);
@@ -101,7 +98,7 @@ fn test_metadata_freshness_fresh() {
 
 #[test]
 fn test_metadata_freshness_stale() {
-    let (env, client) = setup_env();
+    let env = Env::default(); let client = setup_env(&env);
     init_contract(&env, &client);
     let anchor = Address::generate(&env);
     let metadata = make_metadata(&env, &anchor);
@@ -121,7 +118,7 @@ fn test_metadata_freshness_stale() {
 
 #[test]
 fn test_metadata_freshness_expired() {
-    let (env, client) = setup_env();
+    let env = Env::default(); let client = setup_env(&env);
     init_contract(&env, &client);
     let anchor = Address::generate(&env);
     let metadata = make_metadata(&env, &anchor);
@@ -144,7 +141,7 @@ fn test_metadata_freshness_expired() {
 
 #[test]
 fn test_rate_limiter_health_not_throttled() {
-    let (env, client) = setup_env();
+    let env = Env::default(); let client = setup_env(&env);
     init_contract(&env, &client);
     client.set_rate_limit_config(&5u32, &100u32);
 
@@ -157,7 +154,7 @@ fn test_rate_limiter_health_not_throttled() {
 
 #[test]
 fn test_rate_limiter_health_throttled() {
-    let (env, client) = setup_env();
+    let env = Env::default(); let client = setup_env(&env);
     init_contract(&env, &client);
     client.set_rate_limit_config(&2u32, &100u32);
 
@@ -174,7 +171,7 @@ fn test_rate_limiter_health_throttled() {
 
 #[test]
 fn test_rate_limiter_health_resets_after_window() {
-    let (env, client) = setup_env();
+    let env = Env::default(); let client = setup_env(&env);
     init_contract(&env, &client);
     client.set_rate_limit_config(&2u32, &10u32);
 
