@@ -74,6 +74,10 @@ pub enum ErrorCode {
     InvalidSep10Token         = 18,
     KycNotFound               = 19,
 
+    // Item not found errors (specific variants — replaces reuse of AttestationNotFound)
+    SessionNotFound           = 32,
+    QuoteNotFound             = 33,
+
     // KYC / webhook / state errors (20–29)
     KycPending                = 20,
     KycRejected               = 21,
@@ -156,6 +160,7 @@ impl ErrorCode {
             ErrorCode::IllegalTransition         => "Illegal transaction state transition",
             ErrorCode::SessionExpired            => "Session has expired",
             ErrorCode::SessionClosed                  => "Session is closed",
+            ErrorCode::SessionNotFound               => "Session not found",
             ErrorCode::UnsupportedCapabilityVersion    => "Service capability version is unsupported",
             ErrorCode::Unauthorized                    => "Caller is not authorized for this operation",
             ErrorCode::SessionOperationLimitExceeded   => "Session operation limit exceeded",
@@ -168,6 +173,7 @@ impl ErrorCode {
             ErrorCode::InvalidRequestContext     => "Request context is invalid",
             ErrorCode::InvalidSessionMetadata    => "Session metadata is invalid",
             ErrorCode::InvalidAssetCode          => "Asset code is invalid",
+            ErrorCode::QuoteNotFound             => "Quote not found",
         }
     }
 }
@@ -330,6 +336,7 @@ impl AnchorKitError {
     pub fn rate_limit_exceeded() -> Self { Self::from_code(ErrorCode::RateLimitExceeded) }
     pub fn session_expired() -> Self { Self::from_code(ErrorCode::SessionExpired) }
     pub fn session_closed() -> Self { Self::from_code(ErrorCode::SessionClosed) }
+    pub fn session_not_found() -> Self { Self::from_code(ErrorCode::SessionNotFound) }
     pub fn session_operation_limit_exceeded() -> Self { Self::from_code(ErrorCode::SessionOperationLimitExceeded) }
     pub fn invalid_weights() -> Self { Self::from_code(ErrorCode::InvalidWeights) }
     pub fn unauthorized() -> Self { Self::from_code(ErrorCode::Unauthorized) }
@@ -340,6 +347,7 @@ impl AnchorKitError {
     pub fn attestor_profile_not_found() -> Self { Self::from_code(ErrorCode::AttestorProfileNotFound) }
     pub fn invalid_request_context() -> Self { Self::from_code(ErrorCode::InvalidRequestContext) }
     pub fn invalid_session_metadata() -> Self { Self::from_code(ErrorCode::InvalidSessionMetadata) }
+    pub fn quote_not_found() -> Self { Self::from_code(ErrorCode::QuoteNotFound) }
     pub fn invalid_asset_code(code: &str) -> Self {
         Self::with_context(
             ErrorCode::InvalidAssetCode,
@@ -475,6 +483,8 @@ mod tests {
         assert_eq!(AnchorKitError::kyc_pending().code,                  ErrorCode::KycPending);
         assert_eq!(AnchorKitError::kyc_rejected().code,                 ErrorCode::KycRejected);
         assert_eq!(AnchorKitError::webhook_delivery_failed().code,      ErrorCode::WebhookDeliveryFailed);
+        assert_eq!(AnchorKitError::session_not_found().code,            ErrorCode::SessionNotFound);
+        assert_eq!(AnchorKitError::quote_not_found().code,              ErrorCode::QuoteNotFound);
         assert_eq!(AnchorKitError::unauthorized().code,                 ErrorCode::Unauthorized);
     }
 
@@ -521,6 +531,8 @@ mod tests {
             ErrorCode::AttestorProfileNotFound,
             ErrorCode::InvalidRequestContext,
             ErrorCode::InvalidSessionMetadata,
+            ErrorCode::SessionNotFound,
+            ErrorCode::QuoteNotFound,
             ErrorCode::Unauthorized,
         ];
         for code in codes {
@@ -540,6 +552,10 @@ mod tests {
         assert_eq!(ErrorCode::SessionClosed         as u32, 26);
         assert_eq!(ErrorCode::UnsupportedCapabilityVersion as u32, 27);
         assert_eq!(ErrorCode::Unauthorized          as u32, 28);
+        assert_eq!(ErrorCode::SessionOperationLimitExceeded as u32, 30);
+        assert_eq!(ErrorCode::InvalidWeights        as u32, 31);
+        assert_eq!(ErrorCode::SessionNotFound       as u32, 32);
+        assert_eq!(ErrorCode::QuoteNotFound         as u32, 33);
         assert_eq!(ErrorCode::CacheExpired          as u32, 48);
         assert_eq!(ErrorCode::CacheNotFound         as u32, 49);
         assert_eq!(ErrorCode::AttestorProfileNotFound as u32, 50);
