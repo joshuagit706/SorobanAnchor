@@ -252,7 +252,7 @@ pub struct AlertConfig {
     pub extra: BTreeMap<String, Value>,
 }
 
-fn secure_read_config_file(path: &Path) -> Result<String, std::io::Error> {
+pub fn secure_read_config_file(path: &Path) -> Result<String, std::io::Error> {
     // Ensure the file exists
     if !path.exists() {
         return Err(std::io::Error::new(

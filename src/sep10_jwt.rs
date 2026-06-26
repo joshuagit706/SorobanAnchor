@@ -335,8 +335,12 @@ pub fn verify_sep10_jwt(
     let signing_input = Bytes::from_slice(env, &buf[..d1]);
     let sig_bytes = Bytes::from_slice(env, sig_dec.as_slice());
 
-    let pk: BytesN<32> = anchor_public_key.clone().try_into().map_err(|_| ())?;
-    let sig: BytesN<64> = sig_bytes.clone().try_into().map_err(|_| ())?;
+    let pk: BytesN<32> = anchor_public_key.clone().try_into().map_err(|_| {
+        soroban_sdk::log!(env, "sep10_jwt: public key byte length mismatch, expected 32");
+    })?;
+    let sig: BytesN<64> = sig_bytes.clone().try_into().map_err(|_| {
+        soroban_sdk::log!(env, "sep10_jwt: signature byte length mismatch, expected 64");
+    })?;
     env.crypto().ed25519_verify(&pk, &signing_input, &sig);
 
     let payload_dec = base64url_decode(payload_b64).map_err(|_| ())?;

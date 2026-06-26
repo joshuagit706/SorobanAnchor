@@ -176,7 +176,7 @@ pub fn verify_payload_hash(stored: &BytesN<32>, expected: &BytesN<32>) -> bool {
 ///
 /// `true` only when both inputs are exactly 32 bytes and are equal; `false`
 /// in all other cases.
-pub fn verify_hash_bytes(stored: &Bytes, expected: &Bytes) -> bool {
+pub(crate) fn verify_hash_bytes(stored: &Bytes, expected: &Bytes) -> bool {
     if stored.len() != 32 || expected.len() != 32 {
         return false;
     }

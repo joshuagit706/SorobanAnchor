@@ -305,8 +305,11 @@ pub struct WeightedRoutingStrategy {
 }
 
 impl WeightedRoutingStrategy {
-    /// Validate that weights sum to 1.0 (within floating-point tolerance).
+    /// Validate that weights sum to 1.0 (within floating-point tolerance) and are non-negative.
     pub fn validate(&self) -> bool {
+        if self.fee_weight < 0.0 || self.speed_weight < 0.0 || self.reputation_weight < 0.0 {
+            return false;
+        }
         let sum = self.fee_weight + self.speed_weight + self.reputation_weight;
         (sum - 1.0_f32).abs() < 1e-4
     }
