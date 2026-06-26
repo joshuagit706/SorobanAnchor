@@ -3,6 +3,8 @@ use soroban_sdk::{
     xdr::ToXdr, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 extern crate alloc;
+use alloc::string::String as RustString;
+use alloc::vec::Vec as RustVec;
 
 use crate::deterministic_hash::{compute_payload_hash, make_storage_key, verify_payload_hash};
 use crate::errors::ErrorCode;
