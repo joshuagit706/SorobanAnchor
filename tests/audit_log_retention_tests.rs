@@ -55,14 +55,14 @@ mod audit_log_retention_tests {
         attestor: &Address,
         sk: &SigningKey,
         ts: u64,
-        nonce: u8,
     ) {
         set_ledger(env, ts);
         let session_id = client.create_session(attestor);
         let subject = Address::generate(env);
-        let mut payload_bytes = [0u8; 32];
-        payload_bytes[0] = nonce;
-        let payload = soroban_sdk::Bytes::from_slice(env, &payload_bytes);
+        let mut buf = [0u8; 32];
+        buf[..16].copy_from_slice(b"payload_hash_32b");
+        buf[16..24].copy_from_slice(&ts.to_be_bytes());
+        let payload = soroban_sdk::Bytes::from_slice(env, &buf);
         let sig = sign_payload(env, sk, &payload);
         client.submit_attestation_with_session(
             &session_id, attestor, &subject, &ts, &payload, &sig,
@@ -105,7 +105,7 @@ mod audit_log_retention_tests {
     fn test_audit_log_count_increments_with_session_ops() {
         let env = make_env(); let (_, client) = setup(&env);
         let (attestor, sk) = add_attestor(&env, &client);
-        emit_audit_log(&env, &client, &attestor, &sk, 2000, 1);
+        emit_audit_log(&env, &client, &attestor, &sk, 2000);
         assert!(client.get_audit_log_count() >= 1);
     }
 
@@ -122,8 +122,8 @@ mod audit_log_retention_tests {
     fn test_paginated_retrieval_returns_correct_entries() {
         let env = make_env(); let (_, client) = setup(&env);
         let (attestor, sk) = add_attestor(&env, &client);
-        emit_audit_log(&env, &client, &attestor, &sk, 2000, 1);
-        emit_audit_log(&env, &client, &attestor, &sk, 3000, 2);
+        emit_audit_log(&env, &client, &attestor, &sk, 2000);
+        emit_audit_log(&env, &client, &attestor, &sk, 3000);
 
         let total = client.get_audit_log_count();
         assert!(total >= 2, "expected at least 2 entries, got {total}");
@@ -136,8 +136,8 @@ mod audit_log_retention_tests {
     fn test_paginated_retrieval_respects_offset() {
         let env = make_env(); let (_, client) = setup(&env);
         let (attestor, sk) = add_attestor(&env, &client);
-        emit_audit_log(&env, &client, &attestor, &sk, 2000, 1);
-        emit_audit_log(&env, &client, &attestor, &sk, 3000, 2);
+        emit_audit_log(&env, &client, &attestor, &sk, 2000);
+        emit_audit_log(&env, &client, &attestor, &sk, 3000);
 
         let total = client.get_audit_log_count();
         let page0 = client.get_audit_logs_paginated(&0, &1);
@@ -153,7 +153,7 @@ mod audit_log_retention_tests {
     fn test_pagination_limit_capped_at_50() {
         let env = make_env(); let (_, client) = setup(&env);
         let (attestor, sk) = add_attestor(&env, &client);
-        emit_audit_log(&env, &client, &attestor, &sk, 2000, 1);
+        emit_audit_log(&env, &client, &attestor, &sk, 2000);
 
         // Requesting 200 should return at most 50
         let page = client.get_audit_logs_paginated(&0, &200);
@@ -164,7 +164,7 @@ mod audit_log_retention_tests {
     fn test_pagination_offset_beyond_total_returns_empty() {
         let env = make_env(); let (_, client) = setup(&env);
         let (attestor, sk) = add_attestor(&env, &client);
-        emit_audit_log(&env, &client, &attestor, &sk, 2000, 1);
+        emit_audit_log(&env, &client, &attestor, &sk, 2000);
 
         let page = client.get_audit_logs_paginated(&9999, &10);
         assert_eq!(page.len(), 0);
@@ -180,7 +180,10 @@ mod audit_log_retention_tests {
         let session_id = client.create_session(&attestor);
 
         let subject = Address::generate(&env);
-        let payload = soroban_sdk::Bytes::from_slice(&env, b"payload_hash_32bytes_exactly____");
+        let mut buf = [0u8; 32];
+        buf[..16].copy_from_slice(b"payload_hash_32b");
+        buf[16..24].copy_from_slice(&2000u64.to_be_bytes());
+        let payload = soroban_sdk::Bytes::from_slice(&env, &buf);
         let sig = sign_payload(&env, &sk, &payload);
         client.submit_attestation_with_session(
             &session_id, &attestor, &subject, &2000u64, &payload, &sig,
@@ -210,8 +213,8 @@ mod audit_log_retention_tests {
         let env = make_env(); let (admin, client) = setup(&env);
         let (attestor, sk) = add_attestor(&env, &client);
         // Create two audit entries at different timestamps
-        emit_audit_log(&env, &client, &attestor, &sk, 1_000, 1);
-        emit_audit_log(&env, &client, &attestor, &sk, 10_000, 2);
+        emit_audit_log(&env, &client, &attestor, &sk, 1_000);
+        emit_audit_log(&env, &client, &attestor, &sk, 10_000);
 
         let before_prune = client.get_audit_log_count();
         assert!(before_prune >= 2);
@@ -226,7 +229,7 @@ mod audit_log_retention_tests {
     fn test_prune_does_not_remove_recent_entries() {
         let env = make_env(); let (admin, client) = setup(&env);
         let (attestor, sk) = add_attestor(&env, &client);
-        emit_audit_log(&env, &client, &attestor, &sk, 10_000, 1);
+        emit_audit_log(&env, &client, &attestor, &sk, 10_000);
 
         set_ledger(&env, 20_000);
         // Prune with a threshold before all entries — nothing should be removed
