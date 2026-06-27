@@ -3,6 +3,8 @@ use soroban_sdk::{
     xdr::ToXdr, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 extern crate alloc;
+use alloc::string::String as RustString;
+use alloc::vec::Vec as RustVec;
 
 use crate::deterministic_hash::{compute_payload_hash, make_storage_key, verify_payload_hash};
 use crate::errors::ErrorCode;
@@ -1631,6 +1633,16 @@ impl AnchorKitContract {
     /// ```
     pub fn set_cache_config(env: Env, config: CacheConfig) {
         Self::require_admin(&env);
+
+        // Zero TTL values would cause every cache entry to expire immediately,
+        // making the SWR window meaningless and every read a cache miss.
+        if config.metadata_ttl_seconds == 0
+            || config.capabilities_ttl_seconds == 0
+            || config.swr_ttl_seconds == 0
+        {
+            panic_with_error!(&env, ErrorCode::ValidationError);
+        }
+
         env.storage().instance().set(&Self::cache_config_key(&env), &config);
         env.storage().instance().extend_ttl(INSTANCE_TTL, INSTANCE_TTL);
     }
@@ -3770,6 +3782,18 @@ impl AnchorKitContract {
         validate_currency_code(&env, &quote_asset);
         validate_fee_percent(&env, fee_percentage);
         validate_amount_limits(&env, minimum_amount, maximum_amount);
+
+        // Reject quotes that are already expired or set in the past.
+        let now = env.ledger().timestamp();
+        if valid_until <= now {
+            panic_with_error!(&env, ErrorCode::InvalidQuote);
+        }
+        // Reject quotes expiring more than 30 days in the future to prevent
+        // unbounded validity windows that make routing unpredictable.
+        const MAX_QUOTE_VALIDITY: u64 = 30 * 24 * 60 * 60;
+        if valid_until.saturating_sub(now) > MAX_QUOTE_VALIDITY {
+            panic_with_error!(&env, ErrorCode::InvalidQuote);
+        }
         let inst = env.storage().instance();
         let qcnt_key = make_storage_key(&env, &[b"QCNT"]);
         let next: u64 = inst.get(&qcnt_key).unwrap_or(0u64) + 1;
@@ -3829,6 +3853,18 @@ impl AnchorKitContract {
         validate_currency_code(&env, &quote_asset);
         validate_fee_percent(&env, fee_percentage);
         validate_amount_limits(&env, minimum_amount, maximum_amount);
+
+        // Reject quotes that are already expired or set in the past.
+        let now = env.ledger().timestamp();
+        if valid_until <= now {
+            panic_with_error!(&env, ErrorCode::InvalidQuote);
+        }
+        // Reject quotes expiring more than 30 days in the future to prevent
+        // unbounded validity windows that make routing unpredictable.
+        const MAX_QUOTE_VALIDITY: u64 = 30 * 24 * 60 * 60;
+        if valid_until.saturating_sub(now) > MAX_QUOTE_VALIDITY {
+            panic_with_error!(&env, ErrorCode::InvalidQuote);
+        }
         let inst = env.storage().instance();
         let qcnt_key = make_storage_key(&env, &[b"QCNT"]);
         let next: u64 = inst.get(&qcnt_key).unwrap_or(0u64) + 1;
