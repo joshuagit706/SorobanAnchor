@@ -4514,11 +4514,12 @@ impl AnchorKitContract {
         let now = env.ledger().timestamp();
         let cfg = Self::get_cache_config_internal(&env);
         let ttl = Self::effective_ttl(ttl_seconds, cfg.metadata_ttl_seconds);
+        let stale = cfg.swr_ttl_seconds;
         let entry = MetadataCache {
             metadata,
             cached_at: now,
             ttl_seconds: ttl,
-            stale_ttl_seconds: 0,
+            stale_ttl_seconds: stale,
             needs_refresh: false,
         };
         let ledger_ttl = if ttl as u32 > MIN_TEMP_TTL { ttl as u32 } else { MIN_TEMP_TTL };
