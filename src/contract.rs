@@ -5830,7 +5830,8 @@ impl AnchorKitContract {
             session.session_ttl_seconds
         };
         let now = env.ledger().timestamp();
-        if now > session.created_at + ttl {
+        let expiry = session.created_at.saturating_add(ttl);
+        if now > expiry {
             panic_with_error!(env, ErrorCode::SessionExpired);
         }
         if session.closed {
