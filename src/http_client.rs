@@ -221,8 +221,6 @@ pub fn fetch_stellar_toml_with_proxy(
 ///
 /// let config = WebhookDeliveryConfig {
 ///     endpoint_url: "https://hooks.example.com/anchor".to_string(),
-///     max_retries: 3,
-///     retry_delay_ms: 100,
 ///     timeout_ms: 5000,
 ///     retry_config: RetryConfig::default(),
 ///     dead_letter_storage_key: "anchor-hook".to_string(),
@@ -413,8 +411,6 @@ mod tests {
         // avoid real network calls in unit tests.
         let config = WebhookDeliveryConfig {
             endpoint_url: "https://hooks.example.com/anchor".to_string(),
-            max_retries: 3,
-            retry_delay_ms: 0,
             timeout_ms: 1000,
             retry_config: RetryConfig {
                 max_attempts: 3,
@@ -453,8 +449,6 @@ mod tests {
 
         let config = WebhookDeliveryConfig {
             endpoint_url: "https://hooks.example.com/anchor".to_string(),
-            max_retries: 2,
-            retry_delay_ms: 0,
             timeout_ms: 1000,
             retry_config: RetryConfig {
                 max_attempts: 2,

@@ -13,8 +13,6 @@ mod webhook_middleware_tests {
     fn config(max_retries: u32) -> WebhookDeliveryConfig {
         WebhookDeliveryConfig {
             endpoint_url: "https://example.com/hook".into(),
-            max_retries,
-            retry_delay_ms: 0,
             timeout_ms: 1000,
             retry_config: RetryConfig::new(max_retries, 0, 0, 1),
             dead_letter_storage_key: "test_dlq".into(),

@@ -29,17 +29,19 @@ use crate::{
 // ---------------------------------------------------------------------------
 
 /// Configuration for a single webhook endpoint.
+///
+/// Retry behaviour is fully described by [`RetryConfig`]: `retry_config.max_attempts`
+/// is the single source of truth for how many delivery attempts are made, and
+/// `retry_config.base_delay_ms` (with the multiplier/cap) controls the backoff
+/// delay. There are intentionally no separate `max_retries` / `retry_delay_ms`
+/// fields — they previously duplicated `RetryConfig` and could silently disagree.
 #[derive(Clone, Debug)]
 pub struct WebhookDeliveryConfig {
     /// Target URL for the HTTP POST.
     pub endpoint_url: String,
-    /// Maximum delivery attempts (passed straight to `RetryConfig::max_attempts`).
-    pub max_retries: u32,
-    /// Base delay between retries in milliseconds.
-    pub retry_delay_ms: u64,
     /// Per-attempt timeout in milliseconds (informational; enforced by `http_post`).
     pub timeout_ms: u64,
-    /// Backoff parameters (base delay, multiplier, cap).
+    /// Backoff parameters: max attempts, base delay, multiplier, cap.
     pub retry_config: RetryConfig,
     /// Key under which failed entries are stored in the DLQ map.
     pub dead_letter_storage_key: String,
@@ -92,8 +94,7 @@ where
     S: FnMut(u64),
     T: Fn() -> u64,
 {
-    let mut retry_cfg = config.retry_config.clone();
-    retry_cfg.max_attempts = config.max_retries;
+    let retry_cfg = config.retry_config.clone();
 
     let last_error_msg: RefCell<String> = RefCell::new(String::new());
     let last_status: RefCell<u16> = RefCell::new(0);
@@ -128,11 +129,12 @@ where
         Err(e) => {
             let last = last_error_msg.into_inner();
             let status = last_status.into_inner();
+            let attempts_made = config.retry_config.max_attempts;
             let entry = DlqEntry {
                 payload: payload.to_string(),
                 failed_at_timestamp: now_fn(),
                 last_status_code: status,
-                attempts_made: config.max_retries,
+                attempts_made,
                 last_error: last.clone(),
             };
             dlq.entry(config.dead_letter_storage_key.clone())
@@ -143,9 +145,9 @@ where
                 ErrorCode::WebhookDeliveryFailed,
                 &format!(
                     "Webhook delivery failed after {} attempt(s): {}",
-                    config.max_retries, e
+                    attempts_made, e
                 ),
-                &format!("attempts_made={} last_status={} last_error={}", config.max_retries, status, last),
+                &format!("attempts_made={} last_status={} last_error={}", attempts_made, status, last),
             ))
         }
     }
@@ -202,8 +204,6 @@ mod tests {
     fn make_config(max_retries: u32) -> WebhookDeliveryConfig {
         WebhookDeliveryConfig {
             endpoint_url: "https://example.com/hook".to_string(),
-            max_retries,
-            retry_delay_ms: 10,
             timeout_ms: 1000,
             retry_config: RetryConfig {
                 max_attempts: max_retries,

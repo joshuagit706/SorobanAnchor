@@ -12,6 +12,8 @@ use crate::rate_limiter::RateLimiter;
 use crate::sep10_jwt;
 use crate::transaction_state_tracker::{OptRecovery, TransactionState, TransactionStateRecord};
 use crate::replay_detection;
+use crate::admin_audit_log::AdminAuditLog;
+use crate::service_management::ServiceManager;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1330,6 +1332,14 @@ impl AnchorKitContract {
         let key = role_key(&env, role, &grantee);
         env.storage().persistent().set(&key, &true);
         env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "grant_role",
+            grantee.to_string(),
+            "",
+            Self::role_name(role),
+        );
         env.events().publish(
             (symbol_short!("role"), symbol_short!("granted"), grantee),
             role as u32,
@@ -1345,6 +1355,14 @@ impl AnchorKitContract {
         if env.storage().persistent().has(&key) {
             env.storage().persistent().remove(&key);
         }
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "revoke_role",
+            grantee.to_string(),
+            Self::role_name(role),
+            "",
+        );
         env.events().publish(
             (symbol_short!("role"), symbol_short!("revoked"), grantee),
             role as u32,
@@ -2097,7 +2115,16 @@ impl AnchorKitContract {
         // Increment count
         env.storage().instance().set(&Self::attestor_count_key(&env), &(current_count + 1));
         env.storage().instance().extend_ttl(INSTANCE_TTL, INSTANCE_TTL);
-        
+
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "register_attestor",
+            attestor.to_string(),
+            "",
+            "registered",
+        );
+
         env.events().publish(
             (symbol_short!("attestor"), symbol_short!("added"), attestor),
             (),
@@ -2157,7 +2184,16 @@ impl AnchorKitContract {
             env.storage().instance().set(&Self::attestor_count_key(&env), &(current_count - 1));
             env.storage().instance().extend_ttl(INSTANCE_TTL, INSTANCE_TTL);
         }
-        
+
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "revoke_attestor",
+            attestor.to_string(),
+            "registered",
+            "revoked",
+        );
+
         env.events().publish(
             (symbol_short!("attestor"), symbol_short!("removed"), attestor),
             (),
@@ -2315,6 +2351,14 @@ impl AnchorKitContract {
         profile.endpoint = endpoint.clone();
         profile.updated_at = now;
         Self::save_profile(&env, &profile);
+        AdminAuditLog::log_action(
+            &env,
+            &attestor,
+            "set_endpoint",
+            attestor.to_string(),
+            "",
+            "updated",
+        );
         env.events().publish(
             (symbol_short!("endpoint"), symbol_short!("updated")),
             EndpointUpdated { attestor, endpoint },
@@ -2904,6 +2948,109 @@ impl AnchorKitContract {
         env.storage().persistent().set(&key, &record);
         env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
         env.events().publish((symbol_short!("services"), symbol_short!("unretire")), (anchor, service));
+    }
+
+    // -----------------------------------------------------------------------
+    // Service enable/disable toggles & rollback (#449)
+    //
+    // These entry points expose the [`ServiceManager`] toggle/snapshot store
+    // on-chain. They complement `configure_services` (which records an anchor's
+    // declared capability set) by letting admins flip individual services on or
+    // off at runtime and roll back to a prior snapshot without re-declaring the
+    // whole set.
+    // -----------------------------------------------------------------------
+
+    /// Enable a single service for `anchor`. Returns `false` if it was already
+    /// enabled. Requires the primary admin.
+    pub fn enable_service(env: Env, anchor: Address, service_code: u32) -> bool {
+        Self::require_admin(&env);
+        let changed = ServiceManager::enable_service(&env, &anchor, service_code);
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "enable_service",
+            anchor.to_string(),
+            "disabled",
+            "enabled",
+        );
+        changed
+    }
+
+    /// Disable a single service for `anchor`. Returns `false` if it was already
+    /// disabled. Requires the primary admin.
+    pub fn disable_service(env: Env, anchor: Address, service_code: u32) -> bool {
+        Self::require_admin(&env);
+        let changed = ServiceManager::disable_service(&env, &anchor, service_code);
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "disable_service",
+            anchor.to_string(),
+            "enabled",
+            "disabled",
+        );
+        changed
+    }
+
+    /// Returns `true` if `service_code` is currently enabled for `anchor` in the
+    /// [`ServiceManager`] toggle store.
+    pub fn is_service_enabled(env: Env, anchor: Address, service_code: u32) -> bool {
+        ServiceManager::is_service_enabled(&env, &anchor, service_code)
+    }
+
+    /// Read the full toggle state (enabled + disabled services) for `anchor`.
+    pub fn get_service_toggle_state(
+        env: Env,
+        anchor: Address,
+    ) -> crate::service_management::ServiceToggleState {
+        ServiceManager::get_service_state(&env, &anchor)
+    }
+
+    /// Take a snapshot of `services` for `anchor` so it can later be restored
+    /// via [`Self::rollback_services`]. Returns the new snapshot id. Requires
+    /// the primary admin.
+    pub fn snapshot_services(
+        env: Env,
+        anchor: Address,
+        services: Vec<u32>,
+        description: String,
+    ) -> u64 {
+        Self::require_admin(&env);
+        let desc = Self::soroban_string_to_rust_string(&env, &description);
+        let snapshot_id = ServiceManager::create_snapshot(&env, &anchor, &services, desc.as_str());
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "snapshot_services",
+            anchor.to_string(),
+            "",
+            "snapshot_taken",
+        );
+        snapshot_id
+    }
+
+    /// Restore the service toggle state captured in `snapshot_id`. Returns
+    /// `false` if no such snapshot exists. Requires the primary admin.
+    pub fn rollback_services(env: Env, snapshot_id: u64) -> bool {
+        Self::require_admin(&env);
+        let restored = ServiceManager::rollback_to_snapshot(&env, snapshot_id);
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "rollback_services",
+            String::from_str(&env, "service_snapshot"),
+            "",
+            "rolled_back",
+        );
+        restored
+    }
+
+    /// Fetch a previously taken service snapshot by id, if it exists.
+    pub fn get_service_snapshot(
+        env: Env,
+        snapshot_id: u64,
+    ) -> Option<crate::service_management::ServiceConfigSnapshot> {
+        ServiceManager::get_snapshot(&env, snapshot_id)
     }
 
     // -----------------------------------------------------------------------
@@ -3502,6 +3649,14 @@ impl AnchorKitContract {
         record.expiry = Some(now + KYC_EXPIRY_SECONDS);
         env.storage().persistent().set(&key, &record);
         env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+        AdminAuditLog::log_action(
+            &env,
+            &operator,
+            "approve_kyc",
+            subject.to_string(),
+            "Pending",
+            "Approved",
+        );
         env.events().publish(
             (symbol_short!("kyc"), symbol_short!("approved"), subject),
             WebhookEvent {
@@ -3530,6 +3685,14 @@ impl AnchorKitContract {
         record.rejection_reason_hash = Some(reason_hash.clone());
         env.storage().persistent().set(&key, &record);
         env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+        AdminAuditLog::log_action(
+            &env,
+            &operator,
+            "reject_kyc",
+            subject.to_string(),
+            "Pending",
+            "Rejected",
+        );
         env.events().publish(
             (symbol_short!("kyc"), symbol_short!("rejected"), subject),
             WebhookEvent {
@@ -4858,6 +5021,14 @@ impl AnchorKitContract {
         env.storage()
             .persistent()
             .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "blacklist_anchor",
+            anchor.to_string(),
+            "active",
+            "blacklisted",
+        );
         env.events().publish(
             (symbol_short!("anchor"), symbol_short!("blacklist")),
             anchor,
@@ -4878,6 +5049,14 @@ impl AnchorKitContract {
         Self::require_admin(&env);
         let key = anchor_blacklist_key(&env, &anchor);
         env.storage().persistent().remove(&key);
+        AdminAuditLog::log_action(
+            &env,
+            &Self::get_admin_internal(&env),
+            "remove_from_blacklist",
+            anchor.to_string(),
+            "blacklisted",
+            "active",
+        );
         env.events().publish(
             (symbol_short!("anchor"), symbol_short!("unblklist")),
             anchor,
@@ -5616,8 +5795,17 @@ impl AnchorKitContract {
     pub fn set_rate_limit_config(env: Env, max_submissions: u32, window_length: u32) {
         Self::require_admin(&env);
         let config = crate::rate_limiter::RateLimitConfig { max_submissions, window_length };
-        RateLimiter::update_config(&env, &Self::get_admin_internal(&env), &config)
+        let admin = Self::get_admin_internal(&env);
+        RateLimiter::update_config(&env, &admin, &config)
             .unwrap_or_else(|_| panic_with_error!(&env, ErrorCode::ValidationError));
+        AdminAuditLog::log_action(
+            &env,
+            &admin,
+            "set_rate_limit_config",
+            String::from_str(&env, "rate_limiter"),
+            "",
+            "updated",
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -5656,6 +5844,15 @@ impl AnchorKitContract {
             .get::<_, Address>(&admin_key(env))
             .unwrap_or_else(|| panic_with_error!(env, ErrorCode::NotInitialized));
         admin.require_auth();
+    }
+
+    /// Stable human-readable name for an [`AdminRole`], used in audit entries.
+    fn role_name(role: AdminRole) -> &'static str {
+        match role {
+            AdminRole::KycAdmin => "KycAdmin",
+            AdminRole::AttestorAdmin => "AttestorAdmin",
+            AdminRole::CacheAdmin => "CacheAdmin",
+        }
     }
 
     /// Returns `true` if `address` holds `role` OR is the primary admin.

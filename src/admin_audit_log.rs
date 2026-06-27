@@ -88,13 +88,60 @@ impl AdminAuditLog {
         status: &str,
         error_message: &str,
     ) {
+        Self::write_event(
+            env,
+            admin,
+            String::from_str(env, change_type),
+            String::from_str(env, target),
+            String::from_str(env, old_value),
+            String::from_str(env, new_value),
+            String::from_str(env, status),
+            String::from_str(env, error_message),
+        );
+    }
+
+    /// Log an admin configuration change where `target` is an on-chain value
+    /// already rendered as a Soroban [`String`] (for example `addr.to_string()`).
+    ///
+    /// This mirrors [`Self::log_change`] but avoids forcing callers inside the
+    /// `no_std` contract to materialise a `&str` for an [`Address`] target. It
+    /// is the entry point used by `contract.rs` to record admin operations.
+    pub fn log_action(
+        env: &Env,
+        admin: &Address,
+        change_type: &str,
+        target: String,
+        old_value: &str,
+        new_value: &str,
+    ) {
+        Self::write_event(
+            env,
+            admin,
+            String::from_str(env, change_type),
+            target,
+            String::from_str(env, old_value),
+            String::from_str(env, new_value),
+            String::from_str(env, "success"),
+            String::from_str(env, ""),
+        );
+    }
+
+    /// Core audit-entry writer shared by the public logging helpers.
+    ///
+    /// All string fields are already materialised as Soroban [`String`]s so this
+    /// function never has to assume the target is a `&str`.
+    fn write_event(
+        env: &Env,
+        admin: &Address,
+        change_type: String,
+        target: String,
+        old_value: String,
+        new_value: String,
+        status: String,
+        error_message: String,
+    ) {
         // Check if audit logging is enabled
-        let config_key = soroban_sdk::Symbol::new(env, "ADMIN_AUDIT_CFG");
-        let config: AdminAuditLogConfig = env
-            .storage()
-            .instance()
-            .get(&config_key)
-            .unwrap_or_else(|| AdminAuditLogConfig::default());
+        let config = Self::get_config(env);
 
         if !config.enabled {
             return;
@@ -118,13 +165,13 @@ impl AdminAuditLog {
         let event = AdminConfigChangeEvent {
             entry_id,
             admin: admin.clone(),
-            change_type: String::from_str(env, change_type),
-            target: String::from_str(env, target),
-            old_value: String::from_str(env, old_value),
-            new_value: String::from_str(env, new_value),
+            change_type,
+            target,
+            old_value,
+            new_value,
             timestamp: env.ledger().timestamp(),
-            status: String::from_str(env, status),
-            error_message: String::from_str(env, error_message),
+            status,
+            error_message,
         };
 
         // Store the event using entry_id as part of the key
