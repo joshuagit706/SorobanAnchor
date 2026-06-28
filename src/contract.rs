@@ -1,6 +1,6 @@
 use soroban_sdk::{
     contract, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    xdr::ToXdr, Bytes, BytesN, Env, String, Symbol, Vec,
+    xdr::ToXdr, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 extern crate alloc;
 use alloc::string::String as RustString;
@@ -11,7 +11,7 @@ use crate::errors::ErrorCode;
 use crate::rate_limiter::RateLimiter;
 use crate::sep10_jwt;
 use crate::transaction_state_tracker::{OptRecovery, TransactionState, TransactionStateRecord};
-use crate::replay_detection;
+use crate::replay_detection::{self, ReplayMetrics};
 use crate::admin_audit_log::AdminAuditLog;
 use crate::service_management::ServiceManager;
 

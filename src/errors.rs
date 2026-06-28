@@ -184,6 +184,8 @@ impl ErrorCode {
             ErrorCode::QuoteNotFound             => "Quote not found",
             ErrorCode::AuditLogNotFound          => "Audit log not found",
             ErrorCode::TransactionNotFound       => "Transaction record not found",
+            ErrorCode::EndpointNotSet            => "Attestor endpoint URL is not set",
+            ErrorCode::WebhookUrlNotSet          => "Attestor webhook URL is not set",
         }
     }
 }
