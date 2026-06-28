@@ -130,6 +130,9 @@ mod routing_tests {
             require_kyc: false,
             require_compliance: false,
             subject: Address::generate(&env),
+            fee_weight: 333,
+            speed_weight: 333,
+            reputation_weight: 334,
         };
 
         // anchor2 has faster settlement time (200 < 600)
@@ -173,6 +176,9 @@ mod routing_tests {
             require_kyc: false,
             require_compliance: false,
             subject: Address::generate(&env),
+            fee_weight: 333,
+            speed_weight: 333,
+            reputation_weight: 334,
         };
 
         // anchor2 has higher reputation (8000 > 3000)
@@ -515,6 +521,9 @@ mod routing_tests {
             require_kyc: false,
             require_compliance: false,
             subject: Address::generate(env),
+            fee_weight: 333,
+            speed_weight: 333,
+            reputation_weight: 334,
         }
     }
 

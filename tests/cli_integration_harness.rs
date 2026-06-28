@@ -379,6 +379,9 @@ fn harness_step6_quote_and_route() {
         require_kyc: false,
         require_compliance: false,
         subject: Address::generate(&env),
+        fee_weight: 333u32,
+        speed_weight: 333u32,
+        reputation_weight: 334u32,
     };
 
     let best = client.route_transaction(&options);

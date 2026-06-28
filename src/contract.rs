@@ -297,6 +297,9 @@ pub struct RoutingOptions {
     pub require_kyc: bool,
     pub require_compliance: bool,
     pub subject: Address,
+    pub fee_weight: u32,       // Issue #469: scaled ×1000
+    pub speed_weight: u32,
+    pub reputation_weight: u32,
 }
 
 /// Composite weighted routing strategy.
@@ -5337,21 +5340,44 @@ impl AnchorKitContract {
                 }
             }
         } else if strategy_sym == Symbol::new(&env, "WeightedScore") {
-            // Issue #55: weighted score = reputation(40%) + liquidity(30%) + uptime(20%) - fee(10%)
-            let weighted_score = |meta: &RoutingAnchorMeta, fee_pct: u32| -> u64 {
-                let fee_factor = if fee_pct <= 100 { 100 - fee_pct } else { 0 };
-                (meta.reputation_score as u64) * 40
-                    + (meta.liquidity_score as u64) * 30
-                    + (meta.uptime_percentage as u64) * 20
-                    + (fee_factor as u64) * 10
-            };
-            let mut best_score: u64 = anchor_meta_opt(&env, &best.anchor)
-                .map(|m| weighted_score(&m, best.fee_percentage))
-                .unwrap_or(0);
+            // Issues #469, #470: use actual weights from options and properly scale fee to basis points
+            // Normalize scores similar to route_anchors
+            let mut max_fee: u32 = 1;
+            let mut max_settlement: u64 = 1;
+            let mut max_reputation: u32 = 1;
+            
             for q in candidates.iter() {
-                let score = anchor_meta_opt(&env, &q.anchor)
-                    .map(|m| weighted_score(&m, q.fee_percentage))
-                    .unwrap_or(0);
+                if q.fee_percentage > max_fee { max_fee = q.fee_percentage; }
+                let meta = anchor_meta_opt(&env, &q.anchor);
+                if let Some(m) = &meta {
+                    if m.average_settlement_time > max_settlement { max_settlement = m.average_settlement_time; }
+                    if m.reputation_score > max_reputation { max_reputation = m.reputation_score; }
+                }
+            }
+            
+            let fw = options.fee_weight as f32 / 1000.0_f32;
+            let sw = options.speed_weight as f32 / 1000.0_f32;
+            let rw = options.reputation_weight as f32 / 1000.0_f32;
+            
+            let weighted_score = |q: &Quote| -> f32 {
+                let meta = anchor_meta_opt(&env, &q.anchor).unwrap_or_else(|| RoutingAnchorMeta {
+                    anchor: q.anchor.clone(),
+                    is_active: false,
+                    reputation_score: 0,
+                    liquidity_score: 0,
+                    uptime_percentage: 0,
+                    average_settlement_time: u64::MAX,
+                    total_volume: 0,
+                });
+                let fee_score = 1.0_f32 - (q.fee_percentage as f32 / max_fee as f32);
+                let speed_score = 1.0_f32 - (meta.average_settlement_time as f32 / max_settlement as f32);
+                let rep_score = meta.reputation_score as f32 / max_reputation as f32;
+                fw * fee_score + sw * speed_score + rw * rep_score
+            };
+            
+            let mut best_score: f32 = weighted_score(&best);
+            for q in candidates.iter() {
+                let score = weighted_score(&q);
                 if score > best_score {
                     best_score = score;
                     best = q;
@@ -5360,7 +5386,7 @@ impl AnchorKitContract {
         }
 
         env.events().publish(
-            (symbol_short!("webhook"), symbol_short!("event")),
+            (symbol_short!("route"), symbol_short!("selected")),
             WebhookEvent {
                 event_type: String::from_str(&env, "transaction_routed"),
                 transaction_id: best.quote_id,
@@ -5472,8 +5498,8 @@ impl AnchorKitContract {
         // Sort descending by score
         scored.sort_unstable_by(|a, b| b.0.cmp(&a.0));
 
-        // Return top max_results quotes as a Soroban Vec
-        let limit = if max_results == 0 { 3u32 } else { max_results };
+        // Return top max_results quotes as a Soroban Vec (issue #467: 0 means no limit)
+        let limit = if max_results == 0 { u32::MAX } else { max_results };
         let mut result: Vec<Quote> = Vec::new(&env);
         for (_, quote) in scored.into_iter().take(limit as usize) {
             result.push_back(quote);
