@@ -4,6 +4,7 @@ use soroban_sdk::{
 };
 extern crate alloc;
 use alloc::string::String as RustString;
+use alloc::string::ToString;
 use alloc::vec::Vec as RustVec;
 
 use crate::deterministic_hash::{compute_payload_hash, make_storage_key, verify_payload_hash};
@@ -49,6 +50,23 @@ pub struct Quote {
     /// was chosen (e.g. `"lowest_fee"`, `"preferred_anchor"`, `"referral"`).
     /// `None` when no reason was recorded.
     pub routing_reason: Option<String>,
+}
+
+/// Pre-v2 quote layout without `routing_reason`. Used when reading legacy records
+/// that were persisted before the field was added to the schema.
+#[contracttype]
+#[derive(Clone)]
+pub struct QuoteV1 {
+    pub quote_id: u64,
+    pub anchor: Address,
+    pub base_asset: String,
+    pub quote_asset: String,
+    pub rate: u64,
+    pub fee_percentage: u32,
+    pub minimum_amount: u64,
+    pub maximum_amount: u64,
+    pub valid_until: u64,
+    pub schema_version: u32,
 }
 
 #[contracttype]
@@ -827,6 +845,7 @@ pub struct AnchorProofRecord {
 //
 // Version history:
 //   SCHEMA_V1 = 1  — initial versioned layout (introduced in this release)
+//   SCHEMA_V2 = 2  — adds `routing_reason: Option<String>` to [`Quote`]
 //
 // Migration strategy:
 //   After a WASM upgrade that increments a schema version, call `migrate()`
@@ -841,6 +860,9 @@ pub struct AnchorProofRecord {
 /// [`KycRecord`].  Consumers should compare against this constant when reading
 /// stored data to detect version skew.
 pub const SCHEMA_V1: u32 = 1;
+
+/// Schema version for [`Quote`] records that include `routing_reason`.
+pub const SCHEMA_V2: u32 = 2;
 
 // ---------------------------------------------------------------------------
 // Supported SEP versions (#353)
@@ -1180,6 +1202,18 @@ fn xdr_to_vec(b: &Bytes) -> alloc::vec::Vec<u8> {
         v.push(b.get(i).expect("xdr_to_vec: index out of range"));
     }
     v
+}
+
+fn quote_index_key(env: &Env) -> Symbol {
+    Symbol::new(env, "QUOTE_INDEX")
+}
+
+fn migrate_quotes_v2_cursor_key(env: &Env) -> Symbol {
+    Symbol::new(env, "MIGRATE_QUOTES_V2_CURSOR")
+}
+
+fn quote_anchor_ref_key(env: &Env, quote_id: u64) -> BytesN<32> {
+    make_storage_key(env, &[b"QANCH", &quote_id.to_be_bytes()])
 }
 
 /// Storage key for a specific `(role, grantee)` pair.
@@ -1577,6 +1611,8 @@ impl AnchorKitContract {
     /// * `env` - The Soroban environment context.
     /// * `new_schema_version` - The schema version to advance to. Must be > 0 and
     ///   greater than the currently stored version (returned by `get_schema_version`).
+    /// * `batch_size` - Maximum number of legacy quote records to rewrite per call
+    ///   when migrating to schema v2.
     ///
     /// # Authorization
     ///
@@ -1595,9 +1631,9 @@ impl AnchorKitContract {
     /// use anchorkit::AnchorKitContract;
     ///
     /// let env = Env::default();
-    /// AnchorKitContract::migrate(env, 1u32);
+    /// AnchorKitContract::migrate(env, 1u32, 100u32);
     /// ```
-    pub fn migrate(env: Env, new_schema_version: u32) {
+    pub fn migrate(env: Env, new_schema_version: u32, batch_size: u32) {
         // migrate must not run before initialization
         if !env.storage().persistent().has(&initialized_key(&env)) {
             panic_with_error!(&env, ErrorCode::NotInitialized);
@@ -1616,10 +1652,159 @@ impl AnchorKitContract {
             panic_with_error!(&env, ErrorCode::ValidationError);
         }
 
+        let cursor_key = migrate_quotes_v2_cursor_key(&env);
+        let v2_migration_pending = env.storage().persistent().has(&cursor_key);
+
+        if new_schema_version >= SCHEMA_V2
+            && (current < SCHEMA_V2 || v2_migration_pending)
+        {
+            let migrated = Self::migrate_quotes_to_v2(&env, batch_size);
+            if migrated > 0 {
+                let admin = Self::get_admin_internal(&env);
+                let new_value =
+                    RustString::from("v2 (") + &migrated.to_string() + ")";
+                AdminAuditLog::log_action(
+                    &env,
+                    &admin,
+                    "schema_migration",
+                    String::from_str(&env, "quotes"),
+                    "v1",
+                    &new_value,
+                );
+            }
+            if env.storage().persistent().has(&cursor_key) {
+                return;
+            }
+        }
+
         env.storage().instance().set(&schema_key, &new_schema_version);
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_TTL, INSTANCE_TTL);
+    }
+
+    /// Rewrite legacy [`Quote`] records to schema v2, processing at most
+    /// `batch_size` entries per call. Returns the number of records migrated.
+    fn migrate_quotes_to_v2(env: &Env, batch_size: u32) -> u32 {
+        if batch_size == 0 {
+            panic_with_error!(env, ErrorCode::ValidationError);
+        }
+
+        let idx_key = quote_index_key(env);
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&idx_key)
+            .unwrap_or_else(|| Vec::new(env));
+
+        let cursor_key = migrate_quotes_v2_cursor_key(env);
+        let resume_after: u64 = env
+            .storage()
+            .persistent()
+            .get(&cursor_key)
+            .unwrap_or(0u64);
+
+        let mut migrated: u32 = 0;
+        let mut last_processed: u64 = resume_after;
+
+        for quote_id in ids.iter() {
+            let id = quote_id;
+            if id <= resume_after {
+                continue;
+            }
+            if migrated >= batch_size {
+                env.storage()
+                    .persistent()
+                    .set(&cursor_key, &last_processed);
+                env.storage().persistent().extend_ttl(
+                    &cursor_key,
+                    PERSISTENT_TTL,
+                    PERSISTENT_TTL,
+                );
+                return migrated;
+            }
+
+            let ref_key = quote_anchor_ref_key(env, id);
+            let anchor: Address = match env.storage().persistent().get(&ref_key) {
+                Some(a) => a,
+                None => {
+                    last_processed = id;
+                    continue;
+                }
+            };
+
+            let anchor_raw = xdr_to_vec(&anchor.to_xdr(env));
+            let q_key = make_storage_key(env, &[b"QUOTE", &anchor_raw, &id.to_be_bytes()]);
+
+            let needs_write = if let Some(quote) = env.storage().persistent().get::<_, Quote>(&q_key)
+            {
+                if quote.schema_version >= SCHEMA_V2 {
+                    last_processed = id;
+                    continue;
+                }
+                let updated = Quote {
+                    routing_reason: None,
+                    schema_version: SCHEMA_V2,
+                    ..quote
+                };
+                env.storage().persistent().set(&q_key, &updated);
+                true
+            } else if let Some(v1) = env.storage().persistent().get::<_, QuoteV1>(&q_key) {
+                if v1.schema_version >= SCHEMA_V2 {
+                    last_processed = id;
+                    continue;
+                }
+                let updated = Quote {
+                    quote_id: v1.quote_id,
+                    anchor: v1.anchor,
+                    base_asset: v1.base_asset,
+                    quote_asset: v1.quote_asset,
+                    rate: v1.rate,
+                    fee_percentage: v1.fee_percentage,
+                    minimum_amount: v1.minimum_amount,
+                    maximum_amount: v1.maximum_amount,
+                    valid_until: v1.valid_until,
+                    schema_version: SCHEMA_V2,
+                    routing_reason: None,
+                };
+                env.storage().persistent().set(&q_key, &updated);
+                true
+            } else {
+                last_processed = id;
+                continue;
+            };
+
+            if needs_write {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&q_key, PERSISTENT_TTL, PERSISTENT_TTL);
+                migrated += 1;
+            }
+            last_processed = id;
+        }
+
+        env.storage().persistent().remove(&cursor_key);
+        migrated
+    }
+
+    fn append_quote_index(env: &Env, quote_id: u64, anchor: &Address) {
+        let idx_key = quote_index_key(env);
+        let mut ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&idx_key)
+            .unwrap_or_else(|| Vec::new(env));
+        ids.push_back(quote_id);
+        env.storage().persistent().set(&idx_key, &ids);
+        env.storage()
+            .persistent()
+            .extend_ttl(&idx_key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        let ref_key = quote_anchor_ref_key(env, quote_id);
+        env.storage().persistent().set(&ref_key, anchor);
+        env.storage()
+            .persistent()
+            .extend_ttl(&ref_key, PERSISTENT_TTL, PERSISTENT_TTL);
     }
 
     /// Get the current on-chain data schema version.
@@ -4102,6 +4287,7 @@ impl AnchorKitContract {
         let q_key = make_storage_key(&env, &[b"QUOTE", &anchor_raw, &next.to_be_bytes()]);
         env.storage().persistent().set(&q_key, &quote);
         env.storage().persistent().extend_ttl(&q_key, PERSISTENT_TTL, PERSISTENT_TTL);
+        Self::append_quote_index(&env, next, &anchor);
 
         let lq_key = make_storage_key(&env, &[b"LATESTQ", &anchor_raw]);
         env.storage().persistent().set(&lq_key, &next);
