@@ -491,3 +491,26 @@ mod cross_platform_hash_tests {
         }
     }
 }
+
+// ── Issue #563: Reproducible build script checks ──────────────────────────────
+
+#[test]
+fn test_reproducible_build_script_exists_and_is_executable() {
+    use std::os::unix::fs::PermissionsExt;
+    let script = Path::new("scripts/verify_reproducible_build.sh");
+    assert!(script.exists(), "scripts/verify_reproducible_build.sh must exist");
+    let metadata = fs::metadata(script).expect("failed to read script metadata");
+    let mode = metadata.permissions().mode();
+    // Check owner execute bit (0o100)
+    assert!(mode & 0o100 != 0, "scripts/verify_reproducible_build.sh must be executable");
+}
+
+#[test]
+fn test_reproducible_build_script_contains_sha256sum() {
+    let content = fs::read_to_string("scripts/verify_reproducible_build.sh")
+        .expect("failed to read scripts/verify_reproducible_build.sh");
+    assert!(
+        content.contains("sha256sum"),
+        "verify_reproducible_build.sh must contain sha256sum for digest comparison"
+    );
+}

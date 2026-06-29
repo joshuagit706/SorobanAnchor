@@ -78,6 +78,27 @@ echo "5. SUMMARY"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "6. REPRODUCIBLE BUILD CHECK"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ -f "scripts/verify_reproducible_build.sh" ]; then
+    if bash scripts/verify_reproducible_build.sh; then
+        check_pass "Reproducible WASM build verified"
+    else
+        check_fail "Reproducible WASM build check failed"
+    fi
+else
+    check_fail "scripts/verify_reproducible_build.sh not found"
+fi
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "5. SUMMARY"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
 if [ $FAILURES -eq 0 ]; then
     echo -e "${GREEN}✓ ALL CHECKS PASSED${NC}"
     exit 0
