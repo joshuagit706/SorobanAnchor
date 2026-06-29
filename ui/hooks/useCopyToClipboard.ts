@@ -165,3 +165,19 @@ export function generateInstallCommand(
 
   return commands[packageManager];
 }
+
+/**
+ * Triggers a browser download of the provided history entries as a JSON file.
+ *
+ * @param history - Array of RequestHistoryEntry objects to export.
+ */
+export function exportHistoryAsJson(history: import('./useAnchorPlayground').RequestHistoryEntry[]): void {
+  const blob = new Blob([JSON.stringify(history, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  anchor.href = url;
+  anchor.download = `anchorkit_history_${ts}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}

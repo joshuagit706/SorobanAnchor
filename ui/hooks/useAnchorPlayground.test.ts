@@ -102,3 +102,81 @@ describe("useAnchorPlayground", () => {
     );
   });
 });
+
+// ─── Issue #565: localStorage persistence tests ───────────────────────────────
+
+describe("useAnchorPlayground – requestHistory persistence", () => {
+  const STORAGE_KEY = "anchorkit_playground_history_v1";
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      json: () => Promise.resolve(MOCK_JSON),
+      text: () => Promise.resolve(""),
+    });
+    Object.defineProperty(global, "performance", {
+      value: { now: jest.fn(() => 0) },
+      writable: true,
+    });
+    Object.defineProperty(global, "crypto", {
+      value: { randomUUID: () => "uuid-persist" },
+      writable: true,
+    });
+  });
+
+  it("hydrates requestHistory from localStorage on mount", () => {
+    const existing = [
+      { id: "h1", timestamp: 1000, operation: "SEP-1 /.well-known/stellar.toml", requestBody: {}, responseStatus: 200, responseBody: {}, durationMs: 50 },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+
+    const { result } = renderHook(() => useAnchorPlayground());
+    expect(result.current.requestHistory).toHaveLength(1);
+    expect(result.current.requestHistory[0].id).toBe("h1");
+  });
+
+  it("corrupted localStorage falls back to empty array", () => {
+    localStorage.setItem(STORAGE_KEY, "not-valid-json{{{}");
+    const { result } = renderHook(() => useAnchorPlayground());
+    expect(result.current.requestHistory).toHaveLength(0);
+  });
+
+  it("new requests are prepended to requestHistory and persisted", async () => {
+    const { result } = renderHook(() => useAnchorPlayground());
+    await act(async () => { await result.current.sendRequest(); });
+
+    expect(result.current.requestHistory).toHaveLength(1);
+    expect(result.current.requestHistory[0].responseStatus).toBe(200);
+
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].responseStatus).toBe(200);
+  });
+
+  it("requestHistory is truncated at MAX_HISTORY_ENTRIES (50)", async () => {
+    // Pre-fill with 50 entries
+    const existing = Array.from({ length: 50 }, (_, i) => ({
+      id: `h${i}`, timestamp: i, operation: "op", requestBody: {}, responseStatus: 200, responseBody: {}, durationMs: 1,
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+
+    const { result } = renderHook(() => useAnchorPlayground());
+    await act(async () => { await result.current.sendRequest(); });
+
+    expect(result.current.requestHistory).toHaveLength(50);
+  });
+
+  it("clearHistory removes localStorage entry and resets state", async () => {
+    const { result } = renderHook(() => useAnchorPlayground());
+    await act(async () => { await result.current.sendRequest(); });
+    expect(result.current.requestHistory).toHaveLength(1);
+
+    act(() => { result.current.clearHistory(); });
+    expect(result.current.requestHistory).toHaveLength(0);
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+});

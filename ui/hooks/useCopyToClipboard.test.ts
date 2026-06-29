@@ -210,3 +210,56 @@ describe('generateInstallCommand', () => {
     expect(result).toBe('npm install anchorkit');
   });
 });
+
+// ─── Issue #565: exportHistoryAsJson tests ────────────────────────────────────
+
+import { exportHistoryAsJson } from './useCopyToClipboard';
+import type { RequestHistoryEntry } from './useAnchorPlayground';
+
+describe('exportHistoryAsJson', () => {
+  let clickSpy: jest.Mock;
+  let createdBlob: Blob | null = null;
+  let mockAnchor: HTMLAnchorElement;
+  let revokeObjectURL: jest.Mock;
+
+  beforeEach(() => {
+    createdBlob = null;
+    clickSpy = jest.fn();
+    revokeObjectURL = jest.fn();
+    mockAnchor = { href: '', download: '', click: clickSpy } as unknown as HTMLAnchorElement;
+
+    // jsdom doesn't provide URL.createObjectURL — assign directly
+    global.URL.createObjectURL = jest.fn((b: Blob) => { createdBlob = b; return 'blob:mock-url'; });
+    global.URL.revokeObjectURL = revokeObjectURL;
+    jest.spyOn(document, 'createElement').mockReturnValue(mockAnchor);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const sampleHistory: RequestHistoryEntry[] = [
+    { id: 'e1', timestamp: 1700000000000, operation: 'SEP-6 /transfer/deposit', requestBody: { asset_code: 'USDC' }, responseStatus: 200, responseBody: { transaction_id: 'tx1' }, durationMs: 123 },
+  ];
+
+  it('creates a Blob with content-type application/json', () => {
+    exportHistoryAsJson(sampleHistory);
+    expect(global.URL.createObjectURL).toHaveBeenCalledTimes(1);
+    expect((createdBlob as Blob).type).toBe('application/json');
+  });
+
+  it('download filename matches anchorkit_history_*.json pattern', () => {
+    exportHistoryAsJson(sampleHistory);
+    expect(mockAnchor.download).toMatch(/^anchorkit_history_.+\.json$/);
+  });
+
+  it('programmatically clicks the anchor element', () => {
+    exportHistoryAsJson(sampleHistory);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('revokes the object URL after clicking', () => {
+    exportHistoryAsJson(sampleHistory);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+  });
+});

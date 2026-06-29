@@ -1,8 +1,21 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type HttpMethod = "GET" | "POST" | "PUT";
+
+export interface RequestHistoryEntry {
+  id: string;
+  timestamp: number;
+  operation: string;
+  requestBody: unknown;
+  responseStatus: number | null;
+  responseBody: unknown;
+  durationMs: number | null;
+}
+
+const HISTORY_STORAGE_KEY = "anchorkit_playground_history_v1";
+const MAX_HISTORY_ENTRIES = 50;
 
 export interface Param {
   key: string;
@@ -133,7 +146,23 @@ export function useAnchorPlayground() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [requestHistory, setRequestHistory] = useState<RequestHistoryEntry[]>([]);
   const { copy, isCopied: copied } = useCopyToClipboard();
+
+  // Hydrate requestHistory from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setRequestHistory(parsed);
+        }
+      }
+    } catch {
+      setRequestHistory([]);
+    }
+  }, []);
 
   const selectSEP = useCallback((sep: SEPProtocol) => {
     setActiveSEP(sep);
@@ -165,6 +194,23 @@ export function useAnchorPlayground() {
     return base;
   }, [domain, activeEp, params]);
 
+  const appendRequestHistory = useCallback((entry: RequestHistoryEntry) => {
+    setRequestHistory(prev => {
+      const updated = [entry, ...prev].slice(0, MAX_HISTORY_ENTRIES);
+      try {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated));
+      } catch {
+        // Silently ignore storage errors (e.g. private browsing quota)
+      }
+      return updated;
+    });
+  }, []);
+
+  const clearHistory = useCallback(() => {
+    localStorage.removeItem(HISTORY_STORAGE_KEY);
+    setRequestHistory([]);
+  }, []);
+
   const sendRequest = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -193,6 +239,15 @@ export function useAnchorPlayground() {
         status: res.status,
         success: res.ok,
       }, ...h.slice(0, 19)]);
+      appendRequestHistory({
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        operation: `${activeSEP.name} ${activeEp.path}`,
+        requestBody: body ? JSON.parse(body) : params,
+        responseStatus: res.status,
+        responseBody: data,
+        durationMs: elapsed,
+      });
     } catch (err) {
       const elapsed = Math.round(performance.now() - t0);
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -207,10 +262,19 @@ export function useAnchorPlayground() {
         status: null,
         success: false,
       }, ...h.slice(0, 19)]);
+      appendRequestHistory({
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        operation: `${activeSEP.name} ${activeEp.path}`,
+        requestBody: params,
+        responseStatus: null,
+        responseBody: { error: msg },
+        durationMs: elapsed,
+      });
     } finally {
       setLoading(false);
     }
-  }, [buildUrl, jwt, activeEp, activeSEP, params]);
+  }, [buildUrl, jwt, activeEp, activeSEP, params, appendRequestHistory]);
 
   const copyResponse = useCallback(() => {
     if (response) copy(JSON.stringify(response.data, null, 2));
@@ -224,6 +288,8 @@ export function useAnchorPlayground() {
     jwt, setJwt,
     response, loading, error,
     history,
+    requestHistory,
+    clearHistory,
     buildUrl,
     sendRequest,
     copyResponse, copied,
